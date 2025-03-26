@@ -1,4 +1,5 @@
 from django.shortcuts import render
+from django.contrib.auth import get_user_model
 from  rest_framework.response import Response
 from django.contrib.auth.models import User
 from rest_framework.views import APIView
@@ -39,9 +40,9 @@ class GenerateOTPView(APIView):
     def post(self, request):
         email = request.data.get('email')
         if not email:
-            return Response({"status":status.HTTP_400_BAD_REQUEST,"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"status":status.HTTP_400_BAD_REQUEST,"message": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
         if not self.is_valid_email(email):
-            return Response({"status":status.HTTP_400_BAD_REQUEST,"error": "Invalid email format."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"status":status.HTTP_400_BAD_REQUEST,"message": "Invalid email format."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             # Check if OTP already exists and has expired
             otp = OTP.objects.filter(email=email).first()
@@ -71,76 +72,80 @@ class GenerateOTPView(APIView):
                 return Response({"status":status.HTTP_200_OK,"message": "OTP sent to your email.","otp": otp_code}, status=status.HTTP_200_OK)
 
             except Exception as e:
-                return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"error": f"Failed to send OTP email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message": f"Failed to send OTP email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except ObjectDoesNotExist:
             # Handle database related issues, if any
-            return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"error": "Unable to process the OTP request. Please try again."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message": "Unable to process the OTP request. Please try again."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         except Exception as e:
             # Handle any unexpected errors
-            return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"error": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"messsage": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
     def is_valid_email(self, email):
         # Basic check for email format
         return "@" in email and "." in email
 
-
+User = get_user_model()
 # Verify OTP and create user
 class VerifyOTPView(APIView):
     permission_classes = [AllowAny]
+
     def post(self, request):
         email = request.data.get('email')
         otp_code = request.data.get('otp_code')
-
-        # Check if email, OTP, password, and confirm_password are provided
-        if not email or not otp_code:
-            return Response({"status":status.HTTP_400_BAD_REQUEST,"error": "Email, OTP are required."}) 
-
+        if not email:
+            return Response({"status":status.HTTP_400_BAD_REQUEST,"message": "Email are required."}, status=400)
         try:
-            # Retrieve OTP from the database
-            otp = OTP.objects.filter(email=email, otp_code=otp_code, expired_at__gt=timezone.now()).first()
+            otp_instance = OTP.objects.filter(email=email, otp_code=otp_code, is_verified=False).latest('created_at')
+            if not otp_instance:
+                return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "Invalid or expired OTP."}, status=400)
+            if otp_instance.otp_code != otp_code:
+                return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "Invalid OTP."}, status=400)
 
-            # Check if OTP is valid and not expired
-            if not otp:
-                return Response({"status":status.HTTP_400_BAD_REQUEST,"error": "Invalid or expired OTP."}, status=status.HTTP_400_BAD_REQUEST)
-            password = request.data.get('password')
-            confirm_password = request.data.get('confirm_password')
-            if not password or not confirm_password:
-                return Response({
-                    "status": status.HTTP_200_OK,
-                    "message": "OTP verified successfully. Now provide a password to complete registration."
-                }, status=status.HTTP_200_OK)
-            # Check if passwords match
-            if password != confirm_password:
-                return Response({"status":status.HTTP_400_BAD_REQUEST,"error": "Passwords do not match."})
+            # Check if OTP is expired
+            current_time = timezone.now()
+            if current_time > otp_instance.created_at + timezone.timedelta(seconds=60):
+                # If OTP expired, mark it as verified (to prevent reuse) and inform the user
+                otp_instance.is_verified = True
+                otp_instance.save()
+                return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "OTP has expired. Please request a new OTP."}, status=400)
 
-            # Create the user with the provided email and password
-            user = User.objects.create_user(email=email, password=password, username=email)
+            # Mark OTP as verified and save
+            otp_instance.is_verified = True
+            otp_instance.save()
 
-            # Delete the OTP record after successful registration
-            otp.delete()
-            user_serializer = UserRegistrationSerializer(user)
-            return Response({
-                "status": status.HTTP_201_CREATED,
-                "message": "User registered successfully.",
-                "user": user_serializer.data  # Include the serialized user data in the response
-            }, status=status.HTTP_201_CREATED)
-
-        except IntegrityError as e:
-            # Handle duplicate username error
-            if "unique constraint" in str(e).lower():
-                return Response({"status":status.HTTP_400_BAD_REQUEST,"error": "A user with this email already exists. Please use a different email."}, 
-                                status=status.HTTP_400_BAD_REQUEST)
-            else:
-                return Response({"status":status.HTTP_400_BAD_REQUEST,"error": f"An unexpected database error occurred: {str(e)}"}, 
-                                 status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"status":status.HTTP_200_OK,"message": "OTP verified successfully."}, status=200)
 
         except Exception as e:
-            # Handle other unexpected errors
-            return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"error": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"status":status.HTTP_400_BAD_REQUEST,"message": f"Invalid or expired OTP.{e}"}, status=400)
+        
+# Create user
+class RegisterUserView(APIView):
 
+    def post(self, request):
+        try:
+            email = request.data.get('email')
+            password = request.data.get('password')
+            print(password,'password')
+            if not email:
+                return Response({"status":status.HTTP_400_BAD_REQUEST,"message": "Email are required."}, status=400)
+            if not password:
+                return Response({"status":status.HTTP_400_BAD_REQUEST,"message": "password are required."}, status=400)
+            if not OTP.objects.filter(email=email, is_verified=True).exists():
+                return Response({"status":status.HTTP_400_BAD_REQUEST,"message": "OTP not verified for this email."}, status=400)
+            # Check if email is unique
+            if User.objects.filter(email=email).exists():
+                return Response({"status":status.HTTP_400_BAD_REQUEST,"message": "Email is already registered."}, status=400)
 
+            # Create and save the user
+            user = User.objects.create_user(username=email, email=email, password=password)
+
+            return Response({"status":status.HTTP_200_OK,"message": "User registered successfully."}, status=201)
+        except Exception as e:
+            return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message":str(e)})
+    
+    
 class LoginView(APIView):
     permission_classes = [AllowAny]
     
@@ -148,15 +153,15 @@ class LoginView(APIView):
         email = request.data.get('email')
         password = request.data.get('password')
         if not email:
-            return Response({"status":status.HTTP_400_BAD_REQUEST,"error": "Email are required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"status":status.HTTP_400_BAD_REQUEST,"message": "Email are required."}, status=status.HTTP_400_BAD_REQUEST)
         if not password:
-            return Response({"status":status.HTTP_400_BAD_REQUEST,"error": "password are required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"status":status.HTTP_400_BAD_REQUEST,"message": "password are required."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             user = authenticate(request,username=email,password=password)
             if user is None:
-                return Response({"status":status.HTTP_401_UNAUTHORIZED,"error": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
+                return Response({"status":status.HTTP_401_UNAUTHORIZED,"message": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
             if not user.check_password(password):
-                return Response({"status":status.HTTP_401_UNAUTHORIZED,"error": "Invalid password."}, status=status.HTTP_401_UNAUTHORIZED)
+                return Response({"status":status.HTTP_401_UNAUTHORIZED,"message": "Invalid password."}, status=status.HTTP_401_UNAUTHORIZED)
             # If user is found, create a token (or get existing one)
             token, created = Token.objects.get_or_create(user=user)
             return Response({
@@ -167,100 +172,41 @@ class LoginView(APIView):
             }, status=status.HTTP_200_OK)
         except Exception as e:
             print(str(e))
-            return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"error": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-#Forgot Password API
-class ForgotPasswordView(APIView):
-
-    def post(self, request):
-        try:
-            email = request.data.get("email")
-            if not email:
-                return Response({"status": status.HTTP_400_BAD_REQUEST, "error": "Email is required"}, 
-                                status=status.HTTP_400_BAD_REQUEST)
-
-            # Check if user exists
-            user = User.objects.filter(email=email).first()
-            if not user:
-                return Response({"status": status.HTTP_400_BAD_REQUEST, "error": "User with this email does not exist."}, 
-                                status=status.HTTP_400_BAD_REQUEST)
-
-            # Generate a 4-digit OTP
-            otp_code = ''.join(random.choices(string.digits, k=4))
-            expiration_time = timezone.now() + timezone.timedelta(seconds=60)
-
-            # Delete any existing OTP for the user
-            OTP.objects.filter(email=email).delete()
-
-            # Save new OTP in the database
-            OTP.objects.create(email=email, otp_code=otp_code, expired_at=expiration_time)
-
-            # # Send OTP via email
-            # subject = "Password Reset OTP"
-            # message = f"Your OTP for password reset is: {otp_code}. It is valid for 60 seconds."
-            # send_mail(subject, message, settings.EMAIL_HOST_USER, [email])
-
-            return Response({
-                "status": status.HTTP_200_OK,
-                "message": "OTP sent successfully to your email.",
-                "otp": otp_code  # ✅ OTP included in response for testing purposes
-            }, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            return Response({
-                "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
-                "error": f"Failed to send OTP email: {str(e)}"
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class VerifyOTPAndResetPasswordView(APIView): 
-
     def post(self, request):
         try:
             email = request.data.get("email")
-            otp_code = request.data.get("otp_code")
+            password = request.data.get("password")
 
-            # ✅ Step 1: Check if email and OTP are provided
-            if not email or not otp_code:
-                return Response({"status": status.HTTP_400_BAD_REQUEST, "error": "Email and OTP are required."}, 
-                                status=status.HTTP_400_BAD_REQUEST)
-
-            # ✅ Step 2: Check if OTP is valid and not expired
-            otp = OTP.objects.filter(email=email, otp_code=otp_code, expired_at__gt=timezone.now()).first()
-            if not otp:
-                return Response({"status": status.HTTP_400_BAD_REQUEST, "error": "Invalid or expired OTP."}, 
+            # ✅ Step 1: Check if email are provided
+            if not email:
+                return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "Email are required."}, 
                                 status=status.HTTP_400_BAD_REQUEST)
                 
-            password = request.data.get("password")
-            confirm_password = request.data.get("confirm_password")
-            if not password or not confirm_password:
+            if not password :
                     return Response({
                         "status": status.HTTP_200_OK,
-                        "message": "OTP verified successfully. Now provide password and confirm password."
+                        "message": "password is required."
                     }, status=status.HTTP_200_OK)
-            if password != confirm_password:
-                return Response({"status": status.HTTP_400_BAD_REQUEST, "error": "Passwords do not match."}, 
-                                status=status.HTTP_400_BAD_REQUEST)
 
             # ✅ Step 4: Update user's password
             user = User.objects.filter(email=email).first()
             if not user:
-                return Response({"status": status.HTTP_404_NOT_FOUND, "error": "User not found."}, 
+                return Response({"status": status.HTTP_404_NOT_FOUND, "message": "User not found."}, 
                                 status=status.HTTP_404_NOT_FOUND)
 
             user.password = make_password(password)  # Hash the password before saving
             user.save()
-
-            # ✅ Step 5: Delete the OTP after successful password reset
-            otp.delete()
 
             return Response({
                 "status": status.HTTP_200_OK,
                 "message": "Password reset successfully."
             }, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"error":str(e)})
+            return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message":str(e)})
         
 
 #Profile APi
@@ -273,7 +219,7 @@ class UserProfileView(APIView):
             business_type = request.POST.get("business_type", "")
             primary_goal = request.POST.get("primary_goal", "")
             if not name:
-                return Response({"status":status.HTTP_400_BAD_REQUEST,"error":"Name is Requried"},status.HTTP_400_BAD_REQUEST)
+                return Response({"status":status.HTTP_400_BAD_REQUEST,"message":"Name is Requried"},status.HTTP_400_BAD_REQUEST)
             business_type_str = ",".join([bt.strip() for bt in business_type.split(",") if bt.strip()])
             primary_goal_str = ",".join([pg.strip() for pg in primary_goal.split(",") if pg.strip()])
             # Create or update user profile

@@ -9,9 +9,12 @@ class OTP(models.Model):
     otp_code = models.CharField(max_length=6)
     created_at = models.DateTimeField(auto_now_add=True)
     expired_at = models.DateTimeField()
-
+    is_verified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
     def __str__(self):
         return f"{self.email} - {self.otp_code}"
+
 
 #Profile Model
 class UserProfile(models.Model):
