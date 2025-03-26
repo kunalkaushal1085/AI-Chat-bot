@@ -1,0 +1,13 @@
+# _pycache file
+__pycache__/
+*/__pycache__/
+
+# Ignore Django migrations
+migrations/
+*/migrations/
+!*/migrations/__init__.py  # Keep the __init__.py file
+
+# Ignore environment files
+.env
+suissma_env/
+venv/
