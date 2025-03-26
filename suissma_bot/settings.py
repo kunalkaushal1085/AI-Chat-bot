@@ -48,6 +48,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8000",
     "http://localhost:3000",
     "http://192.168.29.38:8001",
+    "http://35.154.171.148:8022",
+   
     
 ]
 
@@ -106,7 +108,8 @@ DATABASES = {
         'NAME': 'rapheala', 
         'USER': 'postgres', 
         'PASSWORD': '12345',
-        'HOST': 'localhost', 
+        # 'HOST': 'localhost', 
+        'HOST': '35.154.171.148', 
         'PORT': '5432',
     }
 }
