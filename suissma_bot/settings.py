@@ -119,7 +119,7 @@ WSGI_APPLICATION = 'suissma_bot.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'rapheala', 
+        'NAME': 'postgres', 
         'USER': 'tokery', 
         'PASSWORD': 'secureLogin!!!3t',
         'HOST': '35.154.171.148', 
