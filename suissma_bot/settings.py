@@ -102,13 +102,25 @@ WSGI_APPLICATION = 'suissma_bot.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
+#Local server
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'rapheala', 
+#         'USER': 'postgres', 
+#         'PASSWORD': '12345',
+#         'HOST': 'localhost',  
+#         'PORT': '5432',
+#     }
+# }
+
+#Live Credentials
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'rapheala', 
-        'USER': 'postgres', 
-        'PASSWORD': '12345',
-        # 'HOST': 'localhost', 
+        'USER': 'tokery', 
+        'PASSWORD': 'secureLogin!!!3t',
         'HOST': '35.154.171.148', 
         'PORT': '5432',
     }
