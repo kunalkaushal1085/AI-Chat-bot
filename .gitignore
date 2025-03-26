@@ -1,3 +1,8 @@
+#__init__.py file
+__init__.py/
+*/__init__.py/
+
+
 # _pycache file
 __pycache__/
 */__pycache__/
