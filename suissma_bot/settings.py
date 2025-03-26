@@ -120,8 +120,8 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'rapheala', 
-        'USER': 'postgres', 
-        'PASSWORD': '12345',
+        'USER': 'tokery', 
+        'PASSWORD': 'secureLogin!!!3t',
         'HOST': '35.154.171.148', 
         'PORT': '5432',
     }
