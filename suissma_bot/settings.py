@@ -113,14 +113,15 @@ WSGI_APPLICATION = 'suissma_bot.wsgi.application'
 #         'PORT': '5432',
 #     }
 # }
-
+#tokery
+#secureLogin!!!3t
 #Live Credentials
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'rapheala', 
-        'USER': 'tokery', 
-        'PASSWORD': 'secureLogin!!!3t',
+        'USER': 'postgres', 
+        'PASSWORD': '12345',
         'HOST': '35.154.171.148', 
         'PORT': '5432',
     }
