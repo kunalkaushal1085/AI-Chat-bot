@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
-from .models import UserProfile
+from .models import UserProfile,WorkSpace
 
 
 # User Registration Serializer
@@ -33,3 +33,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = UserProfile
         fields = ["name", "business_type", "primary_goal"]
 
+class WorkSpaceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WorkSpace
+        fields = ['id', 'user', 'name', 'description', 'created_at']    # add id
+        read_only_fields = ['id', 'user', 'created_at']
