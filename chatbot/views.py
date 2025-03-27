@@ -56,6 +56,8 @@ class GenerateOTPView(APIView):
             return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "Invalid email format."}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
+            if User.objects.filter(email=email).exists():
+                return Response({"status":status.HTTP_200_OK,"message":"user already exists"},status.HTTP_200_OK)
             otp = OTP.objects.filter(email=email).first()
             
             if otp:
