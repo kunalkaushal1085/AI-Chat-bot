@@ -9,7 +9,8 @@ urlpatterns = [
     path('customer-register', RegisterUserView.as_view(), name='customer_register'),
     path('customer-login', LoginView.as_view(), name='customer_login'),
     path('reset-password', VerifyOTPAndResetPasswordView.as_view(), name='reset-password'),
-    path("update-profile", UserProfileView.as_view(), name="update-profile"),
+    path("update-profile", UserProfileView.as_view(), name="update-profiles"),
+    path('create-workspace', WorkSpaceView.as_view(), name='create-workspace'),
    
 ]
 
