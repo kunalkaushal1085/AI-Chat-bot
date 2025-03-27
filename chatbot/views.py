@@ -176,7 +176,50 @@ class RegisterUserView(APIView):
         except Exception as e:
             return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message":str(e)})
     
-    
+#Forgot Password API
+class ForgotPasswordView(APIView):
+
+    def post(self, request):
+        try:
+            email = request.data.get("email")
+            if not email:
+                return Response({"status": status.HTTP_400_BAD_REQUEST, "error": "Email is required"}, 
+                                status=status.HTTP_400_BAD_REQUEST)
+
+            # Check if user exists
+            user = User.objects.filter(email=email).first()
+            if not user:
+                return Response({"status": status.HTTP_400_BAD_REQUEST, "error": "User with this email does not exist."}, 
+                                status=status.HTTP_400_BAD_REQUEST)
+
+            # Generate a 4-digit OTP
+            otp_code = ''.join(random.choices(string.digits, k=4))
+            expiration_time = timezone.now() + timezone.timedelta(seconds=60)
+
+            # Delete any existing OTP for the user
+            OTP.objects.filter(email=email).delete()
+
+            # Save new OTP in the database
+            OTP.objects.create(email=email, otp_code=otp_code, expired_at=expiration_time)
+
+            # # Send OTP via email
+            subject = "Password Reset OTP"
+            message = f"Your OTP for password reset is: {otp_code}. It is valid for 60 seconds."
+            send_mail(subject, message, settings.EMAIL_HOST_USER, [email])
+
+            return Response({
+                "status": status.HTTP_200_OK,
+                "message": "OTP sent successfully to your email.",
+                "otp": otp_code  # ✅ OTP included in response for testing purposes
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "error": f"Failed to send OTP email: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            
 class LoginView(APIView):
     permission_classes = [AllowAny]
     
