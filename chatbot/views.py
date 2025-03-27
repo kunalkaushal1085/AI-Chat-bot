@@ -7,7 +7,7 @@ from rest_framework import status
 from django.contrib.auth import authenticate,login as django_login, logout as django_logout
 from rest_framework.permissions import IsAuthenticated,IsAdminUser
 from rest_framework.authtoken.models import Token
-from .models import OTP
+from .models import *
 from .serializers import UserRegistrationSerializer
 from dotenv import load_dotenv
 from django.core.mail import send_mail
@@ -22,6 +22,10 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 import string
 from .serializers import *
+import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -79,13 +83,13 @@ class GenerateOTPView(APIView):
             
             try:
                 # Send OTP via email (this part is currently commented out)
-                # send_mail(
-                #     "Your OTP Code",
-                #     f"Your OTP code is: {otp_code}",
-                #     settings.EMAIL_HOST_USER,
-                #     [email],
-                #     fail_silently=False,
-                # )
+                send_mail(
+                    "Your OTP Code",
+                    f"Your OTP code is: {otp_code}",
+                    settings.EMAIL_HOST_USER,
+                    [email],
+                    fail_silently=False,
+                )
 
                 return Response({"status": status.HTTP_200_OK, "message": "OTP sent to your email.", "otp": otp_code}, status=status.HTTP_200_OK)
 
@@ -265,3 +269,40 @@ class UserProfileView(APIView):
             return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message":str(e)})
         
 
+class WorkSpaceView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        user = request.user
+        name = request.data.get("name")
+        description = request.data.get("description")
+        logger.debug(f"Received data: name={name}, description={description}")
+        if not name:
+            return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "Workspace name is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not description:
+            return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "Workspace description is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Create a new workspace for the logged-in user
+            workspace = WorkSpace.objects.create(
+                user=user,
+                name=name,
+                description=description
+            )
+            logger.debug(f"Workspace created: {workspace}")
+            logger.debug(f"Workspace type: {type(workspace)}")
+            serializer = WorkSpaceSerializer(workspace)
+            workspace_data = serializer.data
+            logger.debug(f"Workspace created: {workspace_data}")
+            return Response({
+                "status": status.HTTP_200_OK,
+                "message": "Workspace created successfully.",
+                "workspace": workspace_data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error occurred: {str(e)}")
+            return Response({
+                "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "message": f"An unexpected error occurred: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
