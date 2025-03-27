@@ -4,7 +4,7 @@ from  rest_framework.response import Response
 from django.contrib.auth.models import User
 from rest_framework.views import APIView
 from rest_framework import status
-from django.contrib.auth import authenticate
+from django.contrib.auth import authenticate,login as django_login, logout as django_logout
 from rest_framework.permissions import IsAuthenticated,IsAdminUser
 from rest_framework.authtoken.models import Token
 from .models import OTP
@@ -27,11 +27,16 @@ load_dotenv()
 
 
 
-def get_base_url(request):
+def baseurl(request):
     """
-    Helper function to generate the base URL for API (e.g., http://localhost:8000/api/).
+    Return a BASE_URL template context for the current request.
     """
-    return f"{request.scheme}://{request.get_host()}"
+    if request.is_secure():
+        scheme = "https://"
+    else:
+        scheme = "http://"
+
+    return scheme + request.get_host()
 
 
 # Generate OTP and send it via email
@@ -182,13 +187,15 @@ class LoginView(APIView):
                 return Response({"status":status.HTTP_401_UNAUTHORIZED,"message": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
             if not user.check_password(password):
                 return Response({"status":status.HTTP_401_UNAUTHORIZED,"message": "Invalid password."}, status=status.HTTP_401_UNAUTHORIZED)
+            django_login(request, user)
+
             # If user is found, create a token (or get existing one)
             token, created = Token.objects.get_or_create(user=user)
             return Response({
                 "status": status.HTTP_200_OK,
                 "message": "Login successful.",
                 "token": token.key,
-                "base_url":get_base_url(request)
+                "base_url":baseurl(request)
             }, status=status.HTTP_200_OK)
         except Exception as e:
             print(str(e))
@@ -247,6 +254,8 @@ class UserProfileView(APIView):
                 user=user,
                 defaults={"name": name, "business_type": business_type_str, "primary_goal": primary_goal_str},
             )
+            user.first_name = name
+            user.save()
             message = "Profile created successfully." if created else "Profile updated successfully."
             return Response(
                 {"status":status.HTTP_200_OK,"message": message, "profile": UserProfileSerializer(profile).data},
@@ -254,3 +263,5 @@ class UserProfileView(APIView):
             )
         except Exception as e:
             return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message":str(e)})
+        
+
