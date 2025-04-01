@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render,redirect
 from django.contrib.auth import get_user_model
 from  rest_framework.response import Response
 from django.contrib.auth.models import User
@@ -24,6 +24,9 @@ import string
 from .serializers import *
 import json
 import logging
+import base64
+import requests
+from django.http import JsonResponse
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +45,18 @@ def baseurl(request):
 
     return scheme + request.get_host()
 
+
+def convertclientidsecret(client_id, client_secret):
+    
+    # Concatenate client_id and client_secret with a colon
+    client_credentials = f"{client_id}:{client_secret}"
+    # Base64 encode the client credentials
+    encoded_credentials = base64.b64encode(client_credentials.encode('utf-8')).decode('utf-8')
+
+    return encoded_credentials
+
+#Global var
+AUTHCODE =''
 
 # Generate OTP and send it via email
 class GenerateOTPView(APIView):
@@ -85,13 +100,13 @@ class GenerateOTPView(APIView):
             
             try:
                 # Send OTP via email (this part is currently commented out)
-                send_mail(
-                    "Your OTP Code",
-                    f"Your OTP code is: {otp_code}",
-                    settings.EMAIL_HOST_USER,
-                    [email],
-                    fail_silently=False,
-                )
+                # send_mail(
+                #     "Your OTP Code",
+                #     f"Your OTP code is: {otp_code}",
+                #     settings.EMAIL_HOST_USER,
+                #     [email],
+                #     fail_silently=False,
+                # )
 
                 return Response({"status": status.HTTP_200_OK, "message": "OTP sent to your email.", "otp": otp_code}, status=status.HTTP_200_OK)
 
@@ -351,3 +366,127 @@ class WorkSpaceView(APIView):
                 "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
                 "message": f"An unexpected error occurred: {str(e)}"
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+#Convert clientID and Client Secret in Base64
+def convertclientidsecret(client_id, client_secret):
+    try:
+        # Concatenate client_id and client_secret with a colon
+        client_credentials = f"{client_id}:{client_secret}"
+        # Base64 encode the client credentials
+        encoded_credentials = base64.b64encode(client_credentials.encode('utf-8')).decode('utf-8')
+
+        return encoded_credentials
+    except Exception as e:
+        return Response({"status":status.HTTP_400_BAD_REQUEST,"message":str(e)})
+
+
+class GetAuthorizationUrl(APIView):
+    def get(self, request):
+        try:
+            auth_url = (
+                f"{os.getenv('AUTH_URL')}?"
+                f"response_type=code&"
+                f"client_id={os.getenv('CLIENT_ID')}&"
+                f"redirect_uri={os.getenv('REDIRECT_URI')}&"
+                f"scope=openid%20profile%20w_member_social%20email"
+            ) 
+
+            return Response({"status": status.HTTP_200_OK,"message":"success", "auth_url": auth_url})
+        except Exception as e:
+            return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message":str(e)})
+    
+class LinkedInRedirectView(APIView):
+    def get(self, request):
+        # Step 3: Handle the redirect and extract the code from the URL
+        auth_code = request.GET.get('code')
+        if auth_code:
+    
+            # Step 4: Exchange the authorization code for an access token
+            token_url = os.getenv("TOKEN_URL")
+            payload = {
+                'grant_type': 'authorization_code',
+                'code': auth_code,
+                'redirect_uri': os.getenv('REDIRECT_URI'),
+                'client_id': os.getenv('CLIENT_ID'),
+                'client_secret': os.getenv('CLIENT_SECRET'),
+            }
+
+            response = requests.post(token_url, data=payload)
+
+            if response.status_code == 200:
+                # Successfully got the access token
+                token_data = response.json()
+                access_token = token_data.get('access_token')
+                expires_in = token_data.get('expires_in')
+
+                return JsonResponse({"status": "success", "access_token": access_token, "expires_in": expires_in})
+            else:
+                return JsonResponse({"status": "error", "message": "Failed to get access token"}, status=response.status_code)
+        
+        else:
+            return JsonResponse({"status": "error", "message": "Authorization code not found"}, status=400)
+        
+        
+#Linkedin API
+# class LinkedinLogin(APIView):
+#     def get(self, request):
+#         # global AUTHCODE
+#         try:
+#             auth_url = (
+#                 f"{os.getenv('AUTH_URL')}?"
+#                 f"response_type=code&"
+#                 f"client_id={os.getenv('CLIENT_ID')}&"
+#                 f"redirect_uri={os.getenv('REDIRECT_URI')}&"
+#                 f"scope=openid%20profile%20w_member_social%20email"
+#             )
+#             if 'code' not in request.GET:
+#                 return redirect(auth_url)
+        
+#             AUTHCODE = request.GET.get("code")
+#             print(f"Received Auth Code: {AUTHCODE}")
+#             if not AUTHCODE:
+#                 return redirect(auth_url)
+#             # Exchange auth code for an access token
+#             token_url = os.getenv("TOKEN_URL")
+#             payload = {
+#                 "grant_type": "authorization_code",
+#                 "code": AUTHCODE,
+#                 "redirect_uri": os.getenv("REDIRECT_URI"),
+#                 "client_id": os.getenv("CLIENT_ID"),
+#                 "client_secret": os.getenv("CLIENT_SECRET"),
+#             }
+            
+#             response = requests.post(token_url, data=payload)
+#             if response.status_code == 200:
+#                 data = response.json()
+#                 print('data',data)
+#                 access_token = data.get("access_token")
+#                 expires_in = data.get("expires_in")
+#                 id_token = data.get("id_token")
+#                 # Convert expires_in (seconds) to a datetime
+#                 expires_at = datetime.now() + timedelta(seconds=expires_in)
+                
+#                 # linkedin_token, created = LinkedinToken.objects.update_or_create(
+#                 #     user=1,
+#                 #     defaults={
+#                 #         "access_token": access_token,
+#                 #         "expires_at": expires_at,
+#                 #     },
+#                 # )
+#                 return Response({
+#                     "status": 200,
+#                     "message": "Access token saved successfully",
+#                     "expires_in": expires_in,
+#                     "expires_at": expires_at.strftime("%Y-%m-%d %H:%M:%S"),
+#                 })
+#             else:
+#                 return Response({
+#                     "status":status.HTTP_500_INTERNAL_SERVER_ERROR,
+#                     "message": "Failed to get access token",
+#                     "details": response.text
+#                 }, status=500)
+#         except Exception as e:
+#             return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message":str(e)})
+

@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
-
+from datetime import datetime, timedelta
+from utils.base import encrypt_data, decrypt_data
 
 
 # OTP Model
@@ -37,3 +38,29 @@ class WorkSpace(models.Model):
     
     def __str__(self):
         return f"{self.name} - {self.user.username}"
+    
+
+class LinkedinToken(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="linkedin_token")
+    access_token = models.CharField(max_length=255, null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def is_expired(self):
+        """Check if token is expired"""
+        if not self.expires_at:
+            return True  
+        return datetime.now() >= self.expires_at
+
+    @property
+    def access_token(self):
+        """Decrypt access token when accessed"""
+        if self.access_token:
+            return decrypt_data(self.access_token)
+        return None
+
+    @access_token.setter
+    def access_token(self, value):
+        """Encrypt access token before saving"""
+        if value:
+            self.access_token = encrypt_data(value)
