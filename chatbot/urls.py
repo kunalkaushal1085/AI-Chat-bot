@@ -14,7 +14,8 @@ urlpatterns = [
     path('create-workspace', WorkSpaceView.as_view(), name='create-workspace'),
     path('get-auth-url', GetAuthorizationUrl .as_view(), name='authurl'),
     path('linkedin/login', LinkedInRedirectView.as_view(), name='linkedin/login/'),
-    # path('linkedin/login', LinkedinLogin.as_view(), name='linkedin/login/'),
+    path('user-info', GetUserInfo.as_view(), name='getuser-info'),
+    path('linkedin-login', LinkedinLoginView.as_view(),name="linkedin-login"),
    
 ]
 
