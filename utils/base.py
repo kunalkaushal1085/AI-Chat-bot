@@ -1,6 +1,8 @@
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 import os
+from rest_framework.response import Response
+from rest_framework import status
 
 load_dotenv()
 
@@ -13,9 +15,15 @@ ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
 
 cipher = Fernet(ENCRYPTION_KEY)
 def encrypt_data(data: str) -> str:
-    """Encrypt the given data using Fernet."""
-    return cipher.encrypt(data.encode()).decode()
+    try:
+        """Encrypt the given data using Fernet."""
+        return cipher.encrypt(data.encode()).decode()
+    except Exception as e:
+        return Response({"status":status.HTTP_400_BAD_REQUEST,"message":str(e)})
 
 def decrypt_data(encrypted_data: str) -> str:
-    """Decrypt the given data using Fernet."""
-    return cipher.decrypt(encrypted_data.encode()).decode()
+    try:
+        """Decrypt the given data using Fernet."""
+        return cipher.decrypt(encrypted_data.encode()).decode()
+    except Exception as e:
+        return Response({"status":status.HTTP_400_BAD_REQUEST,"message":str(e)})
