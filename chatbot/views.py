@@ -100,13 +100,13 @@ class GenerateOTPView(APIView):
             
             try:
                 # Send OTP via email (this part is currently commented out)
-                # send_mail(
-                #     "Your OTP Code",
-                #     f"Your OTP code is: {otp_code}",
-                #     settings.EMAIL_HOST_USER,
-                #     [email],
-                #     fail_silently=False,
-                # )
+                send_mail(
+                    "Your OTP Code",
+                    f"Your OTP code is: {otp_code}",
+                    settings.EMAIL_HOST_USER,
+                    [email],
+                    fail_silently=False,
+                )
 
                 return Response({"status": status.HTTP_200_OK, "message": "OTP sent to your email.", "otp": otp_code}, status=status.HTTP_200_OK)
 
@@ -329,6 +329,7 @@ class UserProfileView(APIView):
             return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message":str(e)})
         
 
+#Create a WorkSpace
 class WorkSpaceView(APIView):
     permission_classes = [IsAuthenticated]
     
@@ -368,6 +369,15 @@ class WorkSpaceView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+#Get user specific workspace
+# class UserWorkSpaceListView(APIView):
+#     permission_classes = [IsAuthenticated]
+#     def get(self,request):
+#         try:
+#             user = request.user
+            
+#         except Exception as e:
+#             return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message":str(e)})
 
 #Convert clientID and Client Secret in Base64
 def convertclientidsecret(client_id, client_secret):
@@ -450,19 +460,25 @@ class LinkedInRedirectView(APIView):
             if response.status_code == 200:
                 # Successfully got the access token
                 token_data = response.json()
-                print(token_data,'@@@@@@@@@@@@@@@@@@@@@')
-                # access_token = token_data.get('access_token')
-                # expires_in = token_data.get('expires_in')
-                # scope = token_data.get('scope')
-                # token_type = token_data.get('token_type')
-                # id_token = token_data.get('id_token')
+                access_token = token_data.get('access_token')
+                expires_in = token_data.get('expires_in')
+                scope = token_data.get('scope')
+                token_type = token_data.get('token_type')
+                id_token = token_data.get('id_token')
 
-                return JsonResponse({"status":status.HTTP_200_OK,"message":"success","data":response.json()})
+                return Response({"status":status.HTTP_200_OK,
+                    "message":"success",
+                    "access_token":access_token,
+                    "expires_in":expires_in,
+                    "scope":scope,
+                    "token_type":token_type,
+                    "id_token":id_token
+                })
             else:
-                return JsonResponse({"status":status.HTTP_400_BAD_REQUEST, "message": "Failed to get access token"}, status=response.status_code)
+                return Response({"status":status.HTTP_400_BAD_REQUEST, "message": "Failed to get access token"}, status=response.status_code)
         
         else:
-            return JsonResponse({"status":status.HTTP_400_BAD_REQUEST, "message": "Authorization code not found"}, status=400)
+            return Response({"status":status.HTTP_400_BAD_REQUEST, "message": "Authorization code not found"}, status=400)
         
         
 #Get UserInfo

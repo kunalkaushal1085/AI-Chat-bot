@@ -36,7 +36,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 class WorkSpaceSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkSpace
-        fields = ['id', 'user', 'name', 'description', 'created_at']    # add id
+        fields = ['id', 'user', 'name', 'description', 'created_at'] # add id
         read_only_fields = ['id', 'user', 'created_at']
 
 
