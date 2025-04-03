@@ -12,6 +12,7 @@ urlpatterns = [
     path('reset-password', VerifyOTPAndResetPasswordView.as_view(), name='reset-password'),
     path("update-profile", UserProfileView.as_view(), name="update-profiles"),
     path('create-workspace', WorkSpaceView.as_view(), name='create-workspace'),
+    path('user/workspaces', UserWorkSpaceListView.as_view(), name='user-workspaces'),
     path('get-auth-url', GetAuthorizationUrl .as_view(), name='authurl'),
     path('linkedin/login', LinkedInRedirectView.as_view(), name='linkedin/login/'),
     path('user-info', GetUserInfo.as_view(), name='getuser-info'),

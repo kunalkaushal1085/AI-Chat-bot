@@ -370,14 +370,22 @@ class WorkSpaceView(APIView):
 
 
 #Get user specific workspace
-# class UserWorkSpaceListView(APIView):
-#     permission_classes = [IsAuthenticated]
-#     def get(self,request):
-#         try:
-#             user = request.user
-            
-#         except Exception as e:
-#             return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message":str(e)})
+class UserWorkSpaceListView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self,request):
+        try:
+            user = request.user
+            workspaces = WorkSpace.objects.filter(user=user)
+            serializer = WorkSpaceSerializer(workspaces, many=True)
+            response_data = {
+                "user_id": user.id,
+                "username": user.username,
+                "workspaces": serializer.data
+            }
+            return Response(response_data)
+        except Exception as e:
+            return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message":str(e)})
+        
 
 #Convert clientID and Client Secret in Base64
 def convertclientidsecret(client_id, client_secret):
