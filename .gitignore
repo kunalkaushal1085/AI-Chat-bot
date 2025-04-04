@@ -17,3 +17,7 @@ migrations/
 .env
 suissma_env/
 venv/
+
+#add media file
+media/
+*/media/
