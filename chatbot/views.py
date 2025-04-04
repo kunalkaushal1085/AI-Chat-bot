@@ -344,8 +344,6 @@ class WorkSpaceView(APIView):
         logger.debug(f"Received data: name={name}, description={description}")
         if not name:
             return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "Workspace name is required."}, status=status.HTTP_400_BAD_REQUEST)
-        if not image:
-            return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "Workspace image is required."}, status=status.HTTP_400_BAD_REQUEST)
         if description is None:
             description =""
         
