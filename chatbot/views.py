@@ -10,6 +10,7 @@ from rest_framework.authtoken.models import Token
 from .models import *
 from .serializers import UserRegistrationSerializer
 from dotenv import load_dotenv
+import re
 from django.core.mail import send_mail
 from django.conf import settings
 from rest_framework.permissions import AllowAny
@@ -17,11 +18,13 @@ from django.utils import timezone
 from django.contrib.auth.hashers import make_password
 import random
 from datetime import timedelta
+from rest_framework.decorators import action
 import os
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 import string
 from .serializers import *
+from django.core.files.base import ContentFile
 import json
 import logging
 import base64
@@ -337,25 +340,29 @@ class WorkSpaceView(APIView):
         user = request.user
         name = request.data.get("name")
         description = request.data.get("description")
+        image = request.FILES.get("image")
         logger.debug(f"Received data: name={name}, description={description}")
         if not name:
             return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "Workspace name is required."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        if not description:
-            return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "Workspace description is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not image:
+            return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "Workspace image is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if description is None:
+            description =""
         
         try:
-            # Create a new workspace for the logged-in user
             workspace = WorkSpace.objects.create(
                 user=user,
                 name=name,
-                description=description
+                description=description,
+                image=image if image else None  # Set image if provided
             )
-            logger.debug(f"Workspace created: {workspace}")
-            logger.debug(f"Workspace type: {type(workspace)}")
             serializer = WorkSpaceSerializer(workspace)
             workspace_data = serializer.data
+            if workspace.image:
+                workspace_data['image'] = request.build_absolute_uri(workspace.image.url)
+                
             logger.debug(f"Workspace created: {workspace_data}")
+
             return Response({
                 "status": status.HTTP_200_OK,
                 "message": "Workspace created successfully.",
@@ -385,8 +392,120 @@ class UserWorkSpaceListView(APIView):
             return Response(response_data)
         except Exception as e:
             return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message":str(e)})
-        
 
+    @action(detail=True, methods=['delete'])
+    def delete(self, request, workspace_id=None):
+        try:
+            user = request.user
+            workspace = WorkSpace.objects.filter(id=workspace_id, user=user).first()
+
+            if not workspace:
+                return Response({
+                    "status": status.HTTP_400_BAD_REQUEST,
+                    "message": "Workspace not found or you do not have permission to delete it."
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Delete the workspace
+            workspace.delete()
+
+            return Response({
+                "status": status.HTTP_200_OK,
+                "message": "Workspace deleted successfully."
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "message": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+    @action(detail=True, methods=['put'])
+    def put(self,request,workspace_id):
+        user = request.user
+        name = request.data.get("name")
+        description = request.data.get("description")  
+        image = request.FILES.get("image") 
+        image_url = request.data.get("image")
+        if not name:
+            return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "Workspace name is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        workspace = WorkSpace.objects.filter(id=workspace_id, user=user).first()
+        if not workspace:
+            return Response({
+                "status": status.HTTP_404_NOT_FOUND,
+                "message": "Workspace not found or you do not have permission to update it."
+            }, status=status.HTTP_404_NOT_FOUND)
+        if description is None:
+            description=""
+        try:
+            if image:
+                workspace.image = image 
+            # Handle the case when an image URL is provided
+            elif image_url and self.is_valid_url(image_url): 
+                workspace.image = self.handle_image_url(image_url)
+            if name:
+                workspace.name = name
+            if description:
+                    workspace.description = description
+
+            workspace.save()
+            serializer = WorkSpaceSerializer(workspace)
+            workspace_data = serializer.data
+
+            # Include the full image URL if the workspace has an image
+            if workspace.image:
+                workspace_data['image'] = request.build_absolute_uri(workspace.image.url)
+
+            logger.debug(f"Workspace updated: {workspace_data}")
+
+            return Response({
+                "status": status.HTTP_200_OK,
+                "message": "Workspace updated successfully.",
+                "workspace": workspace_data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Error occurred: {str(e)}")
+            return Response({
+                "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "message": f"An unexpected error occurred: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+    def is_valid_url(self, url):
+        """
+        Checks if the provided URL is valid.
+        """
+        regex = re.compile(
+            r'^(?:http|ftp)s?://' # http:// or https://
+            r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|' # domain...
+            r'localhost|' # localhost...
+            r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|' # ...or ipv4
+            r'\[?[A-F0-9]*:[A-F0-9:]+\]?)' # ...or ipv6
+            r'(?::\d+)?' # optional port
+            r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+        return re.match(regex, url) is not None
+
+    def handle_image_url(self, image_url):
+        """
+        Downloads the image from the provided URL and returns it as a file.
+        """
+        try:
+            # Fetch the image from the URL
+            response = requests.get(image_url)
+            response.raise_for_status()  # Raise error if status code isn't 200
+            
+            # Get image content and file name
+            image_content = response.content
+            image_name = image_url.split("/")[-1]
+
+            # Save the image as a file
+            image_file = ContentFile(image_content, name=image_name)
+            return image_file
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error downloading image from URL: {str(e)}")
+            return None
+        
+        
+        
 #Convert clientID and Client Secret in Base64
 def convertclientidsecret(client_id, client_secret):
     try:
@@ -416,35 +535,6 @@ class GetAuthorizationUrl(APIView):
             return Response({"status": status.HTTP_200_OK,"message":"success", "auth_url": auth_url})
         except Exception as e:
             return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message":str(e)})
-
-
-class GetAccessToken(APIView):
-    def get(self, request):
-        try:
-            # Ensure the authorization code is received
-            auth_code = request.GET.get("code")
-            if not auth_code:
-                return Response({"status": 400, "message": "Authorization code not found"})
-
-            token_url = "https://www.linkedin.com/oauth/v2/accessToken"
-            data = {
-                "grant_type": "authorization_code",
-                "code": auth_code,
-                "redirect_uri": os.getenv("REDIRECT_URI"),
-                "client_id": os.getenv("CLIENT_ID"),
-                "client_secret": os.getenv("CLIENT_SECRET"),
-            }
-
-            headers = {"Content-Type": "application/x-www-form-urlencoded"}
-            response = requests.post(token_url, data=data, headers=headers)
-
-            if response.status_code == 200:
-                return Response({"status": 200, "message": "Access token received", "data": response.json()})
-            else:
-                return Response({"status": response.status_code, "message": "Failed to get access token", "details": response.json()})
-
-        except Exception as e:
-            return Response({"status": 500, "message": str(e)})
         
         
 class LinkedInRedirectView(APIView):
@@ -509,82 +599,3 @@ class GetUserInfo(APIView):
         except Exception as e:
             print(e)
             
-
-#Google auth api
-# class LinkedinLoginView(APIView):
-#     def post(self, request):
-#         email = request.data.get("email", None)
-#         first_name = request.data.get("first_name", None)
-        
-#         if not email:  
-#             return Response({  
-#                 "status": status.HTTP_400_BAD_REQUEST,  
-#                 "message": "Please provide email ",  
-#             }) 
-#         if not first_name:  
-#             return Response({  
-#                 "status": status.HTTP_400_BAD_REQUEST,  
-#                 "message": "Please provide name ",  
-#             }) 
-#         user = User.objects.filter(email=email).first()
-#         if user:
-#             django_login(request, user)
-#         else:
-#             serializer = GoogleAuthSerializer(data=request.data)
-#             if serializer.is_valid(raise_exception=True):
-#                 user = serializer.save()
-#                 django_login(request, user)
-
-#         token, created = Token.objects.get_or_create(user=user)
-#         return Response({
-#             "status": status.HTTP_200_OK,
-#             "message": "Successfully logged in",
-#             "user_id": user.id,
-#             "token": token.key,
-#             "base_url": baseurl(request),
-#         })
-
-
-class LinkedinLoginView(APIView):  
-    def post(self, request):  
-        try:
-            email = request.data.get("email", None)  
-            first_name = request.data.get("first_name", None)  
-            last_name = request.data.get("last_name", "")
-
-            if not email or not first_name:  
-                return Response({  
-                    "status": status.HTTP_400_BAD_REQUEST,  
-                    "message": "Please provide both email and first name",  
-                })  
-
-            user = User.objects.filter(email=email).first()  
-
-            if user:  
-                # User already exists, log them in  
-                django_login(request, user)  
-            else:  
-                # New user, create an account  
-                serializer = GoogleAuthSerializer(data={"email": email, "first_name": first_name, "last_name": last_name})  
-                if serializer.is_valid():  
-                    user = serializer.save()  
-                    django_login(request, user)  
-                else:  
-                    return Response({  
-                        "status": status.HTTP_400_BAD_REQUEST,  
-                        "message": "Error creating user",  
-                        "errors": serializer.errors,  
-                    })  
-
-            # Generate token  
-            token, _ = Token.objects.get_or_create(user=user)  
-
-            return Response({  
-                "status": status.HTTP_200_OK,  
-                "message": "Successfully logged in",  
-                "user_id": user.id,  
-                "token": token.key,  
-                "base_url":baseurl(request)
-            })  
-        except Exception as e:
-            return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message":str(e)})

@@ -34,6 +34,7 @@ class WorkSpace(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="work_space")
     name = models.CharField(max_length=100)
     description = models.CharField(max_length=1000)
+    image = models.ImageField(upload_to='workspaces/', blank=True, null=True, default='default_image.jpg')
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
@@ -41,7 +42,7 @@ class WorkSpace(models.Model):
     
 
 class LinkedinToken(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="linkedin_token")
+    # user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="linkedin_token")
     access_token = models.CharField(max_length=255, null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

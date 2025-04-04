@@ -13,10 +13,12 @@ urlpatterns = [
     path("update-profile", UserProfileView.as_view(), name="update-profiles"),
     path('create-workspace', WorkSpaceView.as_view(), name='create-workspace'),
     path('user/workspaces', UserWorkSpaceListView.as_view(), name='user-workspaces'),
+    path('workspace/<int:workspace_id>/', UserWorkSpaceListView.as_view(), name='user-workspace-delete'),#delete workspace
+    path('workspace/<int:workspace_id>/update/', UserWorkSpaceListView.as_view(), name='workspace-update'),#update workspace
     path('get-auth-url', GetAuthorizationUrl .as_view(), name='authurl'),
     path('linkedin/login', LinkedInRedirectView.as_view(), name='linkedin/login/'),
     path('user-info', GetUserInfo.as_view(), name='getuser-info'),
-    path('linkedin-login', LinkedinLoginView.as_view(),name="linkedin-login"),
+
    
 ]
 

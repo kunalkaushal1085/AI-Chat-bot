@@ -36,47 +36,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
 class WorkSpaceSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkSpace
-        fields = ['id', 'user', 'name', 'description', 'created_at'] # add id
+        fields = ['id', 'user', 'name', 'description','image','created_at'] # add id
         read_only_fields = ['id', 'user', 'created_at']
 
-
-# class GoogleAuthSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = User
-#         fields = ['id', 'first_name','email']
-
-#     def validate_email(self, value):
-#         """
-#         Check if the email address is unique.
-#         """
-#         if User.objects.filter(email=value).exists():
-#             raise serializers.ValidationError('This email address is already in use.')
-#         return value
-
-#     def create(self, validated_data):
-#         username = validated_data['email'].split('@')[0]
-#         user = User.objects.create(
-#             username=username,
-#             email=validated_data['email'],
-#             first_name=validated_data['first_name'],
-#             last_name=validated_data['last_name'],
-#         )
-#         return user
-
-class GoogleAuthSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ["id", "first_name", "last_name", "email"]
-
-    def create(self, validated_data):
-        # Extract username from email
-        username = validated_data["email"].split("@")[0]
-        
-        user = User.objects.create_user(
-            username=username,
-            email=validated_data["email"],
-            first_name=validated_data["first_name"],
-            last_name=validated_data.get("last_name", ""),
-            password=None,
-        )
-        return user
