@@ -383,6 +383,7 @@ class UserWorkSpaceListView(APIView):
             workspaces = WorkSpace.objects.filter(user=user)
             serializer = WorkSpaceSerializer(workspaces, many=True)
             response_data = {
+                "status": status.HTTP_200_OK,
                 "user_id": user.id,
                 "username": user.username,
                 "workspaces": serializer.data
