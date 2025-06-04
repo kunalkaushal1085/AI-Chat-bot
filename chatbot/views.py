@@ -186,7 +186,11 @@ class RegisterUserView(APIView):
             # Check if email is unique
             if User.objects.filter(email=email).exists():
                 return Response({"status":status.HTTP_400_BAD_REQUEST,"message": "Email is already registered."}, status=400)
-
+            if len(password) < 8:
+                return Response({
+                    "status": status.HTTP_200_OK,
+                    "message": "Password must be at least 8 characters long."
+                })
             # Create and save the user
             user = User.objects.create_user(username=email, email=email, password=password)
 
@@ -212,7 +216,7 @@ class ForgotPasswordView(APIView):
 
             # Generate a 4-digit OTP
             otp_code = ''.join(random.choices(string.digits, k=4))
-            expiration_time = timezone.now() + timezone.timedelta(seconds=60)
+            expiration_time = timezone.now() + timezone.timedelta(minutes=5)
 
             # Delete any existing OTP for the user
             OTP.objects.filter(email=email).delete()
@@ -222,7 +226,7 @@ class ForgotPasswordView(APIView):
 
             # # Send OTP via email
             subject = "Password Reset OTP"
-            message = f"Your OTP for password reset is: {otp_code}. It is valid for 60 seconds."
+            message = f"Your OTP for password reset is: {otp_code}. It is valid for 5 minutes."
             send_mail(subject, message, settings.EMAIL_HOST_USER, [email])
 
             return Response({
