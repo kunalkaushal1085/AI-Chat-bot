@@ -31,6 +31,8 @@ import base64
 import requests
 from django.http import JsonResponse
 from chatbot.models import LoginAttempt
+from chatbot.helper import upload_image_to_s3
+from django.contrib.sessions.backends.db import SessionStore
 
 
 logger = logging.getLogger(__name__)
@@ -420,10 +422,12 @@ class UserWorkSpaceListView(APIView):
             user = request.user
             workspaces = WorkSpace.objects.filter(user=user)
             serializer = WorkSpaceSerializer(workspaces, many=True)
+            active_workspace_id = request.session.get('active_workspace_id')
             response_data = {
                 "status": status.HTTP_200_OK,
                 "user_id": user.id,
                 "username": user.username,
+                "active_workspace_id": active_workspace_id,
                 "workspaces": serializer.data
             }
             return Response(response_data)
@@ -540,7 +544,32 @@ class UserWorkSpaceListView(APIView):
         except requests.exceptions.RequestException as e:
             logger.error(f"Error downloading image from URL: {str(e)}")
             return None
-        
+
+
+
+class SetActiveWorkspaceView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self,request):
+        user = request.user
+        workspace_id = request.data.get("workspace_id")
+        if not workspace_id:
+            return Response({
+                "status": status.HTTP_400_BAD_REQUEST,
+                "message": "Workspace ID is required."
+            }, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            workspace = WorkSpace.objects.get(id=workspace_id,user=user)
+        except WorkSpace.DoesNotExist:
+            return Response({"status": status.HTTP_404_NOT_FOUND,
+                "message": "Workspace not found or access denied."},status=status.HTTP_404_NOT_FOUND)
+        # Store active workspace in session
+        request.session['active_workspace_id']=workspace_id
+        request.session.modified = True
+        return Response({
+            "status": status.HTTP_200_OK,
+            "message": "Workspace set as active.",
+            "active_workspace_id": workspace_id
+        }, status=status.HTTP_200_OK)
         
         
 #Convert clientID and Client Secret in Base64
@@ -627,7 +656,6 @@ class GetUserInfo(APIView):
                 "X-Restli-Protocol-Version": "2.0.0"
                 }
             response = requests.get(url, headers=headers)
-            print(response,'@@@@@@@@@@@@@@@@@@')
             if response.status_code == 200:
                 return response.json()
             else:
