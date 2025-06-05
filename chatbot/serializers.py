@@ -10,11 +10,17 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         fields = ['email', 'password']
         extra_kwargs = {'password': {'write_only': True}}
 
+    def validate_password(self, value):
+        if len(value) < 8:
+            raise serializers.ValidationError("Password must be at least 8 characters long.")
+        return value
+
     def create(self, validated_data):
         user = User.objects.create_user(
             email=validated_data['email'],
             password=validated_data['password'],
             username=validated_data['email'],  # Use the email as the username
+
         )
         return user
 

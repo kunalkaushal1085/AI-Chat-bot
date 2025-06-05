@@ -173,33 +173,32 @@ class VerifyOTPView(APIView):
 
 # Create user
 class RegisterUserView(APIView):
-
     def post(self, request):
         try:
-            email = request.data.get('email')
-            password = request.data.get('password')
-            print(password,'password')
-            if not email:
-                return Response({"status":status.HTTP_400_BAD_REQUEST,"message": "Email are required."}, status=400)
-            if not password:
-                return Response({"status":status.HTTP_400_BAD_REQUEST,"message": "password are required."}, status=400)
-            if not OTP.objects.filter(email=email, is_verified=True).exists():
-                return Response({"status":status.HTTP_400_BAD_REQUEST,"message": "OTP not verified for this email."}, status=400)
-            # Check if email is unique
-            if User.objects.filter(email=email).exists():
-                return Response({"status":status.HTTP_400_BAD_REQUEST,"message": "Email is already registered."}, status=400)
-            if len(password) < 8:
-                return Response({
-                    "status": status.HTTP_200_OK,
-                    "message": "Password must be at least 8 characters long."
-                })
-            # Create and save the user
-            user = User.objects.create_user(username=email, email=email, password=password)
+            serializer = UserRegistrationSerializer(data=request.data)
+            if not request.data.get('email'):
+                return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "Email is required."}, status=400)
 
-            return Response({"status":status.HTTP_200_OK,"message": "User registered successfully."}, status=201)
+            if not request.data.get('password'):
+                return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "Password is required."}, status=400)
+
+            email = request.data['email']
+            if not OTP.objects.filter(email=email, is_verified=True).exists():
+                return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "OTP not verified for this email."}, status=400)
+
+            if User.objects.filter(email=email).exists():
+                return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "Email is already registered."}, status=400)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response({"status": status.HTTP_200_OK, "message": "User registered successfully.","data":serializer.data}, status=200)
+            else:
+                return Response({"status": status.HTTP_400_BAD_REQUEST, "errors": serializer.errors}, status=400)
+
         except Exception as e:
-            return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message":str(e)})
-    
+            return Response({"status": status.HTTP_500_INTERNAL_SERVER_ERROR, "message": str(e)}, status=500)
+        
+
 #Forgot Password API
 class ForgotPasswordView(APIView):
 
