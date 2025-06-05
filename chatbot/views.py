@@ -30,6 +30,8 @@ import logging
 import base64
 import requests
 from django.http import JsonResponse
+from chatbot.models import LoginAttempt
+
 
 logger = logging.getLogger(__name__)
 
@@ -242,36 +244,69 @@ class ForgotPasswordView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             
+#User Login 
 class LoginView(APIView):
     permission_classes = [AllowAny]
     
-    def post(self,request):
+    def post(self, request):
         email = request.data.get('email')
         password = request.data.get('password')
-        if not email:
-            return Response({"status":status.HTTP_400_BAD_REQUEST,"message": "Email are required."}, status=status.HTTP_400_BAD_REQUEST)
-        if not password:
-            return Response({"status":status.HTTP_400_BAD_REQUEST,"message": "password are required."}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            user = authenticate(request,username=email,password=password)
-            if user is None:
-                return Response({"status":status.HTTP_401_UNAUTHORIZED,"message": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
-            if not user.check_password(password):
-                return Response({"status":status.HTTP_401_UNAUTHORIZED,"message": "Invalid password."}, status=status.HTTP_401_UNAUTHORIZED)
-            django_login(request, user)
 
-            # If user is found, create a token (or get existing one)
-            token, created = Token.objects.get_or_create(user=user)
+        if not email:
+            return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not password:
+            return Response({"status": status.HTTP_400_BAD_REQUEST, "message": "Password is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get or create LoginAttempt record
+        attempt, _ = LoginAttempt.objects.get_or_create(email=email)
+
+        # Check if the email is locked
+        if attempt.is_locked():
+            remaining = (attempt.locked_until - timezone.now()).seconds
+            return Response({
+                "status": status.HTTP_403_FORBIDDEN,
+                "message": f"Account locked due to multiple failed attempts. Try again in {remaining} seconds."
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            user = authenticate(request, username=email, password=password)
+
+            if user is None or not user.check_password(password):
+                # Failed attempt
+                attempt.failed_attempts += 1
+
+                if attempt.failed_attempts >= 5:
+                    attempt.locked_until = timezone.now() + timedelta(minutes=1)
+                    attempt.save()
+                    return Response({
+                        "status": status.HTTP_403_FORBIDDEN,
+                        "message": "Too many failed attempts. Account locked for 1 minute."
+                    }, status=status.HTTP_403_FORBIDDEN)
+
+                attempt.save()
+                return Response({"status": status.HTTP_401_UNAUTHORIZED, "message": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
+
+            # Success: reset attempts
+            attempt.failed_attempts = 0
+            attempt.locked_until = None
+            attempt.save()
+
+            django_login(request, user)
+            token, _ = Token.objects.get_or_create(user=user)
+
             return Response({
                 "status": status.HTTP_200_OK,
                 "message": "Login successful.",
                 "token": token.key,
-                "base_url":baseurl(request)
+                "base_url": baseurl(request)
             }, status=status.HTTP_200_OK)
-        except Exception as e:
-            print(str(e))
-            return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+        except Exception as e:
+            return Response({
+                "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "message": f"An unexpected error occurred: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 
 class VerifyOTPAndResetPasswordView(APIView): 
     def post(self, request):

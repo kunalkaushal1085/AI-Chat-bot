@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from datetime import datetime, timedelta
 from utils.base import encrypt_data, decrypt_data
+from django.utils import timezone
 
 
 # OTP Model
@@ -15,6 +16,15 @@ class OTP(models.Model):
     
     def __str__(self):
         return f"{self.email} - {self.otp_code}"
+
+
+class LoginAttempt(models.Model):
+    email = models.EmailField(unique=True)
+    failed_attempts = models.IntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)
+
+    def is_locked(self):
+        return self.locked_until and timezone.now() < self.locked_until
 
 
 #Profile Model
