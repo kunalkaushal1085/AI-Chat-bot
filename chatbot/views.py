@@ -244,7 +244,7 @@ class ForgotPasswordView(APIView):
                 "error": f"Failed to send OTP email: {str(e)}"
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-            
+from rest_framework_simplejwt.tokens import RefreshToken
 #User Login 
 class LoginView(APIView):
     permission_classes = [AllowAny]
@@ -293,12 +293,14 @@ class LoginView(APIView):
             attempt.save()
 
             django_login(request, user)
-            token, _ = Token.objects.get_or_create(user=user)
+            refresh = RefreshToken.for_user(user)
+            access = refresh.access_token
 
             return Response({
                 "status": status.HTTP_200_OK,
                 "message": "Login successful.",
-                "token": token.key,
+                "access": str(access),
+                "refresh": str(refresh),
                 "base_url": baseurl(request)
             }, status=status.HTTP_200_OK)
 
@@ -307,7 +309,8 @@ class LoginView(APIView):
                 "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
                 "message": f"An unexpected error occurred: {str(e)}"
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
+
 
 class VerifyOTPAndResetPasswordView(APIView): 
     def post(self, request):
@@ -546,9 +549,10 @@ class UserWorkSpaceListView(APIView):
             return None
 
 
-
+#Actie Workspace
 class SetActiveWorkspaceView(APIView):
     permission_classes = [IsAuthenticated]
+    """We have store the Active workspace in session!. """
     def post(self,request):
         user = request.user
         workspace_id = request.data.get("workspace_id")
