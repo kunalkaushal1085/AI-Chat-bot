@@ -33,6 +33,7 @@ from django.http import JsonResponse
 from chatbot.models import LoginAttempt
 from chatbot.helper import upload_image_to_s3
 from django.contrib.sessions.backends.db import SessionStore
+from utils.base import get_user_from_token
 
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ def baseurl(request):
         scheme = "http://"
 
     return scheme + request.get_host()
-
+    
 
 def convertclientidsecret(client_id, client_secret):
     
@@ -352,6 +353,11 @@ class UserProfileView(APIView):
     def post(self,request):
         try:
             user = request.user
+            if not user or not user.is_authenticated:
+                user = get_user_from_token(request)
+                print(user,'user')
+                if not user:
+                    return Response({"status": 401, "message": "Invalid or expired token."}, status=401)
             name = request.data.get("name")
             business_type = request.POST.get("business_type", "")
             primary_goal = request.POST.get("primary_goal", "")
@@ -381,6 +387,11 @@ class WorkSpaceView(APIView):
     
     def post(self, request):
         user = request.user
+        if not user or not user.is_authenticated:
+            user = get_user_from_token(request)
+            print(user,'user')
+            if not user:
+                return Response({"status": 401, "message": "Invalid or expired token."}, status=401)
         name = request.data.get("name")
         description = request.data.get("description")
         image = request.FILES.get("image")
@@ -423,6 +434,11 @@ class UserWorkSpaceListView(APIView):
     def get(self,request):
         try:
             user = request.user
+            if not user or not user.is_authenticated:
+                user = get_user_from_token(request)
+                print(user,'user')
+                if not user:
+                    return Response({"status": 401, "message": "Invalid or expired token."}, status=401)
             workspaces = WorkSpace.objects.filter(user=user)
             serializer = WorkSpaceSerializer(workspaces, many=True)
             active_workspace_id = request.session.get('active_workspace_id')
@@ -555,6 +571,10 @@ class SetActiveWorkspaceView(APIView):
     """We have store the Active workspace in session!. """
     def post(self,request):
         user = request.user
+        if not user or not user.is_authenticated:
+            user = get_user_from_token(request)
+            if not user:
+                return Response({"status": 401, "message": "Invalid or expired token."}, status=401)
         workspace_id = request.data.get("workspace_id")
         if not workspace_id:
             return Response({
