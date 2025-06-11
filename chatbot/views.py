@@ -108,11 +108,30 @@ class GenerateOTPView(APIView):
             
             try:
                 # Send OTP via email (this part is currently commented out)
+                message = f"""
+                    Hi {email},
+
+                    We received your request for a single-use code to reset the password for your email account.
+
+                    Your Single-use code is: {otp_code}
+
+                    Enter this code on the official app. Don't share it with anyone.
+
+                    Thanks,  
+                    Sussima-bot team
+                    """
+                # send_mail(
+                #     "Your OTP Code",
+                #     f"Your OTP code is: {otp_code}",
+                #     settings.EMAIL_HOST_USER,
+                #     [email],
+                #     fail_silently=False,
+                # )
                 send_mail(
-                    "Your OTP Code",
-                    f"Your OTP code is: {otp_code}",
-                    settings.EMAIL_HOST_USER,
-                    [email],
+                    subject="Your OTP Code{otp_code}",
+                    message=message,
+                    from_email=settings.EMAIL_HOST_USER,
+                    recipient_list=[email],
                     fail_silently=False,
                 )
 
