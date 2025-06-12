@@ -518,6 +518,9 @@ class UserWorkSpaceListView(APIView):
         try:
             if image:
                 workspace.image = image 
+             # If image is passed explicitly as null or empty string, clear the image
+            elif image_url in [None, '', 'null']:
+                workspace.image = None
             # Handle the case when an image URL is provided
             elif image_url and self.is_valid_url(image_url): 
                 workspace.image = self.handle_image_url(image_url)
@@ -533,7 +536,9 @@ class UserWorkSpaceListView(APIView):
             # Include the full image URL if the workspace has an image
             if workspace.image:
                 workspace_data['image'] = request.build_absolute_uri(workspace.image.url)
-
+            else:
+                print('inside else')
+                workspace_data['image'] = None
             logger.debug(f"Workspace updated: {workspace_data}")
 
             return Response({
