@@ -34,6 +34,9 @@ from chatbot.models import LoginAttempt
 from chatbot.helper import upload_image_to_s3
 from django.contrib.sessions.backends.db import SessionStore
 from utils.base import get_user_from_token
+from rest_framework_simplejwt.views import TokenRefreshView
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+
 
 
 logger = logging.getLogger(__name__)
@@ -331,6 +334,20 @@ class LoginView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class CustomTokenRefreshView(TokenRefreshView):
+    def post(self, request, *args, **kwargs):
+        try:
+            response = super().post(request, *args, **kwargs)
+            return Response({
+                "status": status.HTTP_200_OK,
+                "message": "Token refreshed successfully.",
+                "access": response.data.get("access")
+            }, status=status.HTTP_200_OK)
+        except TokenError as e:
+            return Response({
+                "status": status.HTTP_401_UNAUTHORIZED,
+                "message": "Invalid or expired refresh token."
+            }, status=status.HTTP_401_UNAUTHORIZED)
 
 class VerifyOTPAndResetPasswordView(APIView): 
     def post(self, request):

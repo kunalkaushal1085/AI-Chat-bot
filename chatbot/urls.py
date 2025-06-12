@@ -19,6 +19,7 @@ urlpatterns = [
     path('get-auth-url', GetAuthorizationUrl .as_view(), name='authurl'),
     path('linkedin/login', LinkedInRedirectView.as_view(), name='linkedin/login/'),
     path('user-info', GetUserInfo.as_view(), name='getuser-info'),
+    path('token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
 
    
 ]
