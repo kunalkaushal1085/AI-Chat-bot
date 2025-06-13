@@ -344,8 +344,9 @@ class CustomTokenRefreshView(APIView):
             return Response({'detail': 'Refresh token missing in headers.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             token = RefreshToken(refresh_token)
+            print(f"{token}=")
             access_token = str(token.access_token)
-            return Response({'status':status.HTTP_200_OK,'access': access_token}, status=status.HTTP_200_OK)
+            return Response({'status':status.HTTP_200_OK,'access': access_token,'refresh': str(token)}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'detail': 'Invalid or expired refresh token.'}, status=status.HTTP_401_UNAUTHORIZED)
 
