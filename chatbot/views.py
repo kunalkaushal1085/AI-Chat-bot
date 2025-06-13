@@ -334,20 +334,22 @@ class LoginView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class CustomTokenRefreshView(TokenRefreshView):
+
+#Refresh to access token generate API
+class CustomTokenRefreshView(APIView):
     def post(self, request, *args, **kwargs):
+        
+        refresh_token = request.headers.get('Refresh-Token')
+        if not refresh_token:
+            return Response({'detail': 'Refresh token missing in headers.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            response = super().post(request, *args, **kwargs)
-            return Response({
-                "status": status.HTTP_200_OK,
-                "message": "Token refreshed successfully.",
-                "access": response.data.get("access")
-            }, status=status.HTTP_200_OK)
-        except TokenError as e:
-            return Response({
-                "status": status.HTTP_401_UNAUTHORIZED,
-                "message": "Invalid or expired refresh token."
-            }, status=status.HTTP_401_UNAUTHORIZED)
+            token = RefreshToken(refresh_token)
+            access_token = str(token.access_token)
+            return Response({'status':status.HTTP_200_OK,'access': access_token}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'detail': 'Invalid or expired refresh token.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+
 
 class VerifyOTPAndResetPasswordView(APIView): 
     def post(self, request):
