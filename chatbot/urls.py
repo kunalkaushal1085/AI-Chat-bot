@@ -20,6 +20,10 @@ urlpatterns = [
     path('linkedin/login', LinkedInRedirectView.as_view(), name='linkedin/login/'),
     path('user-info', GetUserInfo.as_view(), name='getuser-info'),
     path('token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
+    path('facebook/callback/', FacebookCallbackView.as_view(), name='facebook-callback'),
+    path('facebook/page/', FacebookPagesView.as_view(), name='facebook-get-page'),
+    # path('facebook/send-post/', FacebookSendPostView.as_view(), name='facebook-send-post'),
+    path('social/send-post/', SocialPostView.as_view(), name='social-send-post'),
 
    
 ]

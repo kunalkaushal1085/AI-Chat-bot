@@ -334,7 +334,6 @@ class LoginView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
 #Refresh to access token generate API
 class CustomTokenRefreshView(APIView):
     def post(self, request, *args, **kwargs):
@@ -344,12 +343,10 @@ class CustomTokenRefreshView(APIView):
             return Response({'detail': 'Refresh token missing in headers.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             token = RefreshToken(refresh_token)
-            print(f"{token}=")
             access_token = str(token.access_token)
             return Response({'status':status.HTTP_200_OK,'access': access_token,'refresh': str(token)}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'detail': 'Invalid or expired refresh token.'}, status=status.HTTP_401_UNAUTHORIZED)
-
 
 
 class VerifyOTPAndResetPasswordView(APIView): 
@@ -732,3 +729,154 @@ class GetUserInfo(APIView):
         except Exception as e:
             print(e)
             
+
+
+facebook_auth_code = None
+
+class FacebookCallbackView(APIView):
+    def get(self, request):
+        auth_code = request.GET.get('code')
+        if not auth_code:
+            # Redirect user to Facebook Login
+            state = "somerandomstate"
+            auth_url = (
+                f"https://www.facebook.com/v19.0/dialog/oauth?"
+                f"response_type=code&"
+                f"client_id={os.getenv("FACEBOOK_APP_ID")}&"
+                f"redirect_uri={os.getenv("REDIRECT_URL")}&"
+                f"state={state}&"
+                f"scope=pages_manage_posts,pages_read_engagement,pages_show_list"
+            )
+            return redirect(auth_url)
+
+        # Step 1: Exchange code for short-lived token
+        token_url = "https://graph.facebook.com/v19.0/oauth/access_token"
+        token_params = {
+            "client_id": os.getenv("FACEBOOK_APP_ID"),
+            "redirect_uri": os.getenv("REDIRECT_URL"),
+            "client_secret": os.getenv("FACEBOOK_APP_SECRET"),
+            "code": auth_code
+        }
+        token_response = requests.get(token_url, params=token_params)
+        if token_response.status_code != 200:
+            return Response({
+                "error": "Failed to exchange code for short-lived token",
+                "details": token_response.json()
+            }, status=status.HTTP_400_BAD_REQUEST)
+        user_access_token = token_response.json().get("access_token")
+        if not user_access_token:
+            return Response({"error": "No access token returned from Facebook."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Step 2: Exchange short-lived token for long-lived token
+        long_token_url = "https://graph.facebook.com/v19.0/oauth/access_token"
+        long_token_params = {
+            "grant_type": "fb_exchange_token",
+            "client_id": os.getenv("FACEBOOK_APP_ID"),
+            "client_secret": os.getenv("FACEBOOK_APP_SECRET"),
+            "fb_exchange_token": user_access_token
+        }
+        long_token_response = requests.get(long_token_url, params=long_token_params)
+        if long_token_response.status_code != 200:
+            return Response({
+                "error": "Failed to exchange for long-lived token",
+                "details": long_token_response.json()
+            }, status=status.HTTP_400_BAD_REQUEST)
+        long_lived_token = long_token_response.json().get("access_token")
+        print(f"{long_lived_token=}")
+        if not long_lived_token:
+            return Response({"error": "No long-lived token returned from Facebook."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Return only the long-lived user access token valid for 60days
+        return Response({
+            "user_access_token": long_lived_token
+        }, status=status.HTTP_200_OK) 
+
+
+def get_pages_info(user_access_token):
+    """
+    Fetch the list of pages the user manages using the user access token.
+    """
+    try:
+        url = "https://graph.facebook.com/v19.0/me/accounts"
+        resp = requests.get(url, params={"access_token": user_access_token})
+        return resp.json()
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class FacebookPagesView(APIView):
+    def post(self, request):
+        user_access_token = request.data.get("user_access_token")
+        if not user_access_token:
+            return Response({"error": "user_access_token is required"}, status=status.HTTP_400_BAD_REQUEST)
+        pages_info = get_pages_info(user_access_token)
+        return Response(pages_info, status=status.HTTP_200_OK) 
+
+
+# class FacebookSendPostView(APIView):
+#     def post(self, request):
+#         try:
+#             page_id = request.data.get("page_id")
+#             page_access_token = request.data.get("page_access_token")
+#             message = request.data.get("message")
+#             if not all([page_id, page_access_token, message]):
+#                 return Response({"error": "page_id, page_access_token, and message are required"}, status=status.HTTP_400_BAD_REQUEST)
+#             post_url = f"https://graph.facebook.com/v19.0/{page_id}/feed"
+#             post_data = {
+#                 "message": message,
+#                 "access_token": page_access_token
+#             }
+#             response = requests.post(post_url, data=post_data)
+#             try:
+#                 resp_json = response.json()
+#             except Exception:
+#                 resp_json = {"error": "Invalid response from Facebook."}
+#             if response.status_code != 200:
+#                 return Response({"error": "Failed to post to Facebook", "details": resp_json}, status=response.status_code)
+#             return Response(resp_json, status=status.HTTP_200_OK) 
+#         except Exception as e:
+#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SocialPostView(APIView):
+    def post(self, request):
+        # Common params
+        message = request.data.get("message")
+        post_to_facebook = request.data.get("post_to_facebook", False)
+        post_to_instagram = request.data.get("post_to_instagram", False)
+        page_id = request.data.get("page_id")
+        page_access_token = request.data.get("page_access_token")
+        image_url = request.data.get("image_url")  # For Instagram
+
+        results = {}
+
+        if post_to_facebook:
+            # Post to Facebook Page
+            fb_url = f"https://graph.facebook.com/v19.0/{page_id}/feed"
+            fb_data = {"message": message, "access_token": page_access_token}
+            fb_resp = requests.post(fb_url, data=fb_data)
+            results["facebook"] = fb_resp.json()
+
+        if post_to_instagram:
+            # 1. Get IG user ID from Page
+            ig_url = f"https://graph.facebook.com/v19.0/{page_id}?fields=instagram_business_account&access_token={page_access_token}"
+            ig_resp = requests.get(ig_url)
+            ig_user_id = ig_resp.json().get("instagram_business_account", {}).get("id")
+            if not ig_user_id:
+                results["instagram"] = {"error": "No Instagram business account linked to this page."}
+            else:
+                # 2. Create media object
+                media_url = f"https://graph.facebook.com/v19.0/{ig_user_id}/media"
+                media_data = {"image_url": image_url, "caption": message, "access_token": page_access_token}
+                media_resp = requests.post(media_url, data=media_data)
+                creation_id = media_resp.json().get("id")
+                if not creation_id:
+                    results["instagram"] = {"error": "Failed to create media object.", "details": media_resp.json()}
+                else:
+                    # 3. Publish media
+                    publish_url = f"https://graph.facebook.com/v19.0/{ig_user_id}/media_publish"
+                    publish_data = {"creation_id": creation_id, "access_token": page_access_token}
+                    publish_resp = requests.post(publish_url, data=publish_data)
+                    results["instagram"] = publish_resp.json()
+
+        return Response(results)
