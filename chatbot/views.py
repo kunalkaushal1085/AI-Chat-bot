@@ -745,7 +745,7 @@ class FacebookCallbackView(APIView):
                 f"client_id={os.getenv("FACEBOOK_APP_ID")}&"
                 f"redirect_uri={os.getenv("REDIRECT_URL")}&"
                 f"state={state}&"
-                f"scope=pages_manage_posts,pages_read_engagement,pages_show_list"
+                f"scope=pages_manage_posts,pages_read_engagement,pages_show_list,instagram_basic,instagram_content_publish"
             )
             return redirect(auth_url)
 
@@ -799,6 +799,7 @@ def get_pages_info(user_access_token):
     try:
         url = "https://graph.facebook.com/v19.0/me/accounts"
         resp = requests.get(url, params={"access_token": user_access_token})
+        print(resp.json(),'resp')
         return resp.json()
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -810,6 +811,7 @@ class FacebookPagesView(APIView):
         if not user_access_token:
             return Response({"error": "user_access_token is required"}, status=status.HTTP_400_BAD_REQUEST)
         pages_info = get_pages_info(user_access_token)
+        print(pages_info,'>>>')
         return Response(pages_info, status=status.HTTP_200_OK) 
 
 
