@@ -384,7 +384,7 @@ class VerifyOTPAndResetPasswordView(APIView):
         
 
 #Profile APi
-class UserProfileView(APIView):
+class UserUpdateProfileView(APIView):
     permission_classes = [IsAuthenticated]
     def post(self,request):
         try:
