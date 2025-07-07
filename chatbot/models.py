@@ -53,7 +53,7 @@ class WorkSpace(models.Model):
 
 class LinkedinToken(models.Model):
     # user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="linkedin_token")
-    access_token = models.CharField(max_length=255, null=True, blank=True)
+    _access_token = models.CharField(max_length=1024, null=True, blank=True, db_column='access_token')
     expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -66,12 +66,20 @@ class LinkedinToken(models.Model):
     @property
     def access_token(self):
         """Decrypt access token when accessed"""
-        if self.access_token:
-            return decrypt_data(self.access_token)
+        if self._access_token:
+            return decrypt_data(self._access_token)
         return None
 
     @access_token.setter
     def access_token(self, value):
         """Encrypt access token before saving"""
         if value:
-            self.access_token = encrypt_data(value)
+            self._access_token = encrypt_data(value)
+        else:
+            self._access_token = None
+
+    def save(self, *args, **kwargs):
+        # Ensure the token is encrypted before saving
+        if self._access_token and not self._access_token.startswith('gAAAA'):
+            self._access_token = encrypt_data(decrypt_data(self._access_token))
+        super().save(*args, **kwargs)

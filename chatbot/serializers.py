@@ -37,7 +37,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = ["name", "business_type", "primary_goal"]
+        fields = ["id","name", "business_type", "primary_goal"]
 
 class WorkSpaceSerializer(serializers.ModelSerializer):
     class Meta:

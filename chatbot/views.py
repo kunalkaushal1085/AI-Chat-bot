@@ -415,7 +415,23 @@ class UserProfileView(APIView):
             )
         except Exception as e:
             return Response({"status":status.HTTP_500_INTERNAL_SERVER_ERROR,"message":str(e)})
-        
+
+
+class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return Response({"status": 401, "message": "Invalid or expired token."}, status=401)
+        try:
+            profile = UserProfile.objects.get(user=user)
+            serializer = UserProfileSerializer(profile)
+            return Response({"status": status.HTTP_200_OK, "profile": serializer.data}, status=status.HTTP_200_OK)
+        except UserProfile.DoesNotExist:
+            return Response({"status": status.HTTP_404_NOT_FOUND, "message": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"status": status.HTTP_500_INTERNAL_SERVER_ERROR, "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 #Create a WorkSpace
 class WorkSpaceView(APIView):
@@ -811,7 +827,6 @@ class FacebookPagesView(APIView):
         if not user_access_token:
             return Response({"error": "user_access_token is required"}, status=status.HTTP_400_BAD_REQUEST)
         pages_info = get_pages_info(user_access_token)
-        print(pages_info,'>>>')
         return Response(pages_info, status=status.HTTP_200_OK) 
 
 
@@ -882,3 +897,161 @@ class SocialPostView(APIView):
                     results["instagram"] = publish_resp.json()
 
         return Response(results)
+
+
+
+#Convert Clientid and secret in Base64
+def convert_client_id_secret(client_id: str, client_secret: str) -> str:
+    client_credentials = f"{client_id}:{client_secret}"
+    encoded_credentials = base64.b64encode(client_credentials.encode('utf-8')).decode('utf-8')
+    return encoded_credentials
+
+
+# Generate a random state value
+def generate_state() -> str:
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=32))
+
+
+
+# LinkedIn app credentials
+client_id = "7701uyxp84acx3"
+client_secret = "WPL_AP1.iZI9aqbm1lFzADAr.glkP2Q=="
+# redirect_url="https://www.linkedin.com/developers/tools/oauth/redirect"
+
+# LinkedIn URLs
+auth_url = "https://www.linkedin.com/oauth/v2/authorization"
+token_url = "https://www.linkedin.com/oauth/v2/accessToken"
+
+# Must match the redirect URI you set in your LinkedIn app
+redirect_uri = "http://localhost:8000/api/oauth/login"
+
+linkedin_code =""
+
+from urllib.parse import quote
+def generate_state():
+    # Implement your state generation logic here
+    import uuid
+    return str(uuid.uuid4())
+
+
+class LinkedInOAuthLoginView(APIView):
+    def get(self, request):
+        code = request.GET.get("code")
+        state = request.GET.get("state")
+        if not code:
+            # Step 1: Redirect user to LinkedIn auth page
+            state_val = generate_state()
+            # scope = "openid profile email w_member_social"
+            scope = "r_liteprofile w_member_social"
+            authorization_url = (
+                f"https://www.linkedin.com/oauth/v2/authorization"
+                f"?response_type=code&client_id={client_id}"
+                f"&redirect_uri={redirect_uri}&state={state_val}"
+                f"&scope={quote(scope)}"
+            )
+            return redirect(authorization_url)
+
+        # Step 2: User came back with 'code', so exchange for access token
+        data = {
+            'grant_type': 'authorization_code',
+            'code': code,
+            'redirect_uri': redirect_uri,
+            'client_id': client_id,
+            'client_secret': client_secret
+        }
+
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+
+        response = requests.post(token_url, data=data, headers=headers)
+        token_data = response.json()
+        print(token_data, "token")
+
+        if response.status_code != 200:
+            return Response({"error": "Failed to get access token", "details": token_data}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            # Save token in the database
+            access_token = token_data.get("access_token")
+            expires_in = token_data.get("expires_in")
+            expires_at = timezone.now() + timedelta(seconds=expires_in) if expires_in else None
+            # You can add logic to associate with a user if needed
+            LinkedinToken.objects.create(
+                access_token=access_token,
+                expires_at=expires_at
+            )
+        except Exception as e:
+            return Response({"error": "Error saving token", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(token_data, status=status.HTTP_200_OK) 
+    
+
+
+class LinkedInRefreshTokenView(APIView):
+    def post(self, request):
+        refresh_token = request.data.get("refresh_token")
+        if not refresh_token:
+            return Response({"error": "refresh_token is required"}, status=status.HTTP_400_BAD_REQUEST)
+        data = {
+            'grant_type': 'refresh_token',
+            'refresh_token': refresh_token,
+            'client_id': client_id,
+            'client_secret': client_secret
+        }
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+        response = requests.post(token_url, data=data, headers=headers)
+        token_data = response.json()
+        if response.status_code != 200:
+            return Response({"error": "Failed to refresh token", "details": token_data}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(token_data, status=status.HTTP_200_OK)
+
+
+class LinkedInPostView(APIView):
+    def post(self, request):
+        content = request.data.get("content")
+        if not content:
+            return Response({"error": "Content is required"}, status=status.HTTP_400_BAD_REQUEST)
+        #Get the latest token
+        token_obj = LinkedinToken.objects.order_by('-created_at').first()
+        if not token_obj:
+            return Response({"error": "No valid token found"}, status=status.HTTP_400_BAD_REQUEST)
+        access_token = token_obj.access_token
+        print(access_token,'access')
+        # Get the LinkedIn user ID (urn)
+        profile_url = "https://api.linkedin.com/v2/me"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        profile_resp = requests.get(profile_url, headers=headers)
+        if profile_resp.status_code != 200:
+            return Response({'error': 'Failed to fetch LinkedIn profile'}, status=profile_resp.status_code)
+        user_urn = profile_resp.json().get("id")
+        if not user_urn:
+            return Response({'error': 'Could not get user ID from LinkedIn'}, status=400)
+        # Prepare the post payload
+        post_url = "https://api.linkedin.com/v2/ugcPosts"
+        post_data = {
+            "author": f"urn:li:person:{user_urn}",
+            "lifecycleState": "PUBLISHED",
+            "specificContent": {
+                "com.linkedin.ugc.ShareContent": {
+                    "shareCommentary": {
+                        "text": content
+                    },
+                    "shareMediaCategory": "NONE"
+                }
+            },
+            "visibility": {
+                "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
+            }
+        }
+        post_resp = requests.post(post_url, headers={
+            "Authorization": f"Bearer {access_token}",
+            "X-Restli-Protocol-Version": "2.0.0",
+            "Content-Type": "application/json"
+        }, json=post_data)
+
+        if post_resp.status_code not in [200, 201]:
+            return Response({'error': 'Failed to post to LinkedIn', 'details': post_resp.json()}, status=post_resp.status_code)
+
+        return Response({'message': 'Post successful', 'linkedin_response': post_resp.json()})
