@@ -755,6 +755,7 @@ class FacebookCallbackView(APIView):
         if not auth_code:
             # Redirect user to Facebook Login
             state = "somerandomstate"
+            print(f"{os.getenv("REDIRECT_URL")=}")
             auth_url = (
                 f"https://www.facebook.com/v19.0/dialog/oauth?"
                 f"response_type=code&"
