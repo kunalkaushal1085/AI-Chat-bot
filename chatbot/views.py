@@ -308,7 +308,7 @@ class LoginView(APIView):
                     }, status=status.HTTP_403_FORBIDDEN)
 
                 attempt.save()
-                return Response({"status": status.HTTP_401_UNAUTHORIZED, "message": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
+                return Response({"status": status.HTTP_401_UNAUTHORIZED, "message": "Please try again or click forgot password to reset it."}, status=status.HTTP_401_UNAUTHORIZED)
 
             # Success: reset attempts
             attempt.failed_attempts = 0
@@ -764,6 +764,7 @@ class FacebookCallbackView(APIView):
                 f"state={state}&"
                 # f"scope=pages_manage_posts,pages_read_engagement,pages_show_list,instagram_basic,instagram_content_publish"
                 f"scope=pages_show_list,pages_read_engagement,instagram_basic,instagram_manage_insights,instagram_manage_comments"
+                
             )
             return redirect(auth_url)
 
