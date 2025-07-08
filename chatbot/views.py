@@ -114,7 +114,7 @@ class GenerateOTPView(APIView):
                 message = f"""
                     Hi {email},
 
-                    We received your request for a single-use code to reset the password for your email account.
+                    We received your request for a single-use code to set up your account.
 
                     Your Single-use code is: {otp_code}
 
@@ -762,7 +762,8 @@ class FacebookCallbackView(APIView):
                 f"client_id={os.getenv("FACEBOOK_APP_ID")}&"
                 f"redirect_uri={os.getenv("REDIRECT_URL")}&"
                 f"state={state}&"
-                f"scope=pages_manage_posts,pages_read_engagement,pages_show_list,instagram_basic,instagram_content_publish"
+                # f"scope=pages_manage_posts,pages_read_engagement,pages_show_list,instagram_basic,instagram_content_publish"
+                f"scope=pages_show_list,pages_read_engagement,instagram_basic,instagram_manage_insights,instagram_manage_comments"
             )
             return redirect(auth_url)
 
