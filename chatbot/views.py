@@ -762,8 +762,7 @@ class FacebookCallbackView(APIView):
                 f"client_id={os.getenv("FACEBOOK_APP_ID")}&"
                 f"redirect_uri={os.getenv("REDIRECT_URL")}&"
                 f"state={state}&"
-                # f"scope=pages_manage_posts,pages_read_engagement,pages_show_list,instagram_basic,instagram_content_publish"
-                f"scope=pages_show_list,pages_read_engagement,instagram_basic,instagram_manage_insights,instagram_manage_comments"
+                f"scope=pages_manage_posts,pages_read_engagement,pages_show_list,instagram_basic,instagram_content_publish"
                 
             )
             return redirect(auth_url)
