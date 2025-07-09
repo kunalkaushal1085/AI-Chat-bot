@@ -36,6 +36,7 @@ from django.contrib.sessions.backends.db import SessionStore
 from utils.base import get_user_from_token
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+import tweepy
 
 
 
@@ -1057,3 +1058,27 @@ class LinkedInPostView(APIView):
             return Response({'error': 'Failed to post to LinkedIn', 'details': post_resp.json()}, status=post_resp.status_code)
 
         return Response({'message': 'Post successful', 'linkedin_response': post_resp.json()})
+
+
+# Twitter Tweet api
+class TwitterPostTweetView(APIView):
+    def post(self, request):
+        
+        tweet_text = request.data.get("tweet")
+        if not tweet_text:
+            return Response({"error": "Tweet text is required."}, status=status.HTTP_400_BAD_REQUEST)
+        client = tweepy.Client(
+            bearer_token=os.getenv('TWITTER_BEARER_TOKEN'),
+            consumer_key=os.getenv('TWITTER_API_KEY'),
+            consumer_secret=os.getenv('TWITTER_API_SECRET'),
+            access_token=os.getenv('TWITTER_ACCESS_TOKEN'),
+            access_token_secret=os.getenv('TWITTER_ACCESS_TOKEN_SECRET')
+        )
+        try:
+            tweet = client.create_tweet(text=tweet_text)
+            tweet_id = tweet.data["id"]
+            return Response({"message": "Tweet posted successfully!", "tweet_id": tweet_id}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+

@@ -28,6 +28,7 @@ urlpatterns = [
     path('oauth/login', LinkedInOAuthLoginView.as_view(), name='linkedin-auth-login'),
     path('oauth/refresh/', LinkedInRefreshTokenView.as_view(), name='linkedin-refresh-token'),
     path('linkedin/post/', LinkedInPostView.as_view(), name='linkedin-post'),
+    path('twitter/post/', TwitterPostTweetView.as_view(), name='twitter-post-tweet')
 
    
 ]
