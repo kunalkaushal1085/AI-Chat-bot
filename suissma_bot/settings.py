@@ -143,18 +143,28 @@ WSGI_APPLICATION = 'suissma_bot.wsgi.application'
 #     }
 # }
 #tokery
-#secureLogin!!!3t
-#Live Credentials
+#Tokery Live Credentials
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'postgres', 
+#         'USER': 'tokery', 
+#         'PASSWORD': 'secureLogin!!!3t',
+#         'HOST': '35.154.171.148', 
+#         'PORT': '5432',
+#     }
+# }
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'postgres', 
-        'USER': 'tokery', 
-        'PASSWORD': 'secureLogin!!!3t',
-        'HOST': '35.154.171.148', 
-        'PORT': '5432',
+        'NAME': os.getenv('DB_NAME'), 
+        'USER': os.getenv('DB_USER'), 
+        'PASSWORD': os.getenv('DB_PASSWORD'), 
+        'HOST': os.getenv('DB_HOST'), 
+        'PORT': os.getenv('DB_PORT'), 
     }
 }
+  
 
 
 # Password validation
