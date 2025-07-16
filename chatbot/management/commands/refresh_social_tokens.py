@@ -17,6 +17,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         while True:
+            print(f'----cron started at {timezone.now()}-----')
             now = timezone.now()
             soon = now + timedelta(seconds=5)
             expiring_tokens = SocialToken.objects.filter(expires_at__lte=soon, refresh_token__isnull=False)
