@@ -37,6 +37,9 @@ from utils.base import get_user_from_token
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 import tweepy
+import secrets
+import hashlib
+from urllib.parse import urlencode
 
 
 
@@ -752,6 +755,8 @@ facebook_auth_code = None
 
 class FacebookCallbackView(APIView):
     def get(self, request):
+        user_id = request.GET.get('state')
+        print(f"{user=}")
         auth_code = request.GET.get('code')
         if not auth_code:
             # Redirect user to Facebook Login
@@ -762,7 +767,7 @@ class FacebookCallbackView(APIView):
                 f"response_type=code&"
                 f"client_id={os.getenv("FACEBOOK_APP_ID")}&"
                 f"redirect_uri={os.getenv("REDIRECT_URL")}&"
-                f"state={state}&"
+                f"state={user}&"
                 f"scope=pages_manage_posts,pages_read_engagement,pages_show_list,instagram_basic,instagram_content_publish,email"
                 
             )
@@ -808,16 +813,19 @@ class FacebookCallbackView(APIView):
             "fields": "id,name,email",
             "access_token": long_lived_token
         }
-        print(params,'params')
         user_info_response = requests.get(user_info_url, params=params)
         user_info = user_info_response.json()
         facebook_user_id = user_info.get("id")
         facebook_email = user_info.get("email")
-        print(facebook_email,'facebook')
 
         expires_at = timezone.now() + timedelta(days=60)
+        User = get_user_model()
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         SocialToken.objects.update_or_create(
-            # user=request.user,
+            user=user,
             provider='facebook',
             social_user_id=facebook_user_id,
             defaults={
@@ -1095,31 +1103,6 @@ class LinkedInPostView(APIView):
         return Response({'message': 'Post successful', 'linkedin_response': post_resp.json()})
 
 
-# Twitter Tweet api
-class TwitterPostTweetView(APIView):
-    def post(self, request):
-        
-        tweet_text = request.data.get("tweet")
-        if not tweet_text:
-            return Response({"error": "Tweet text is required."}, status=status.HTTP_400_BAD_REQUEST)
-        client = tweepy.Client(
-            bearer_token=os.getenv('TWITTER_BEARER_TOKEN'),
-            consumer_key=os.getenv('TWITTER_API_KEY'),
-            consumer_secret=os.getenv('TWITTER_API_SECRET'),
-            access_token=os.getenv('TWITTER_ACCESS_TOKEN'),
-            access_token_secret=os.getenv('TWITTER_ACCESS_TOKEN_SECRET')
-        )
-        try:
-            tweet = client.create_tweet(text=tweet_text)
-            tweet_id = tweet.data["id"]
-            return Response({"message": "Tweet posted successfully!", "tweet_id": tweet_id}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-import secrets
-import hashlib
-from urllib.parse import urlencode
-
 CODE_VERIFIER_STORE = {}
 
 def generate_pkce():
@@ -1194,3 +1177,24 @@ class TwitterCallbackView(APIView):
             "scope": token_data.get("scope")
         }, status=200)
 
+
+#Send Twitter Tweet api
+class TwitterPostTweetView(APIView):
+    def post(self, request):
+        
+        tweet_text = request.data.get("tweet")
+        if not tweet_text:
+            return Response({"error": "Tweet text is required."}, status=status.HTTP_400_BAD_REQUEST)
+        client = tweepy.Client(
+            bearer_token=os.getenv('TWITTER_BEARER_TOKEN'),
+            consumer_key=os.getenv('TWITTER_API_KEY'),
+            consumer_secret=os.getenv('TWITTER_API_SECRET'),
+            access_token=os.getenv('TWITTER_ACCESS_TOKEN'),
+            access_token_secret=os.getenv('TWITTER_ACCESS_TOKEN_SECRET')
+        )
+        try:
+            tweet = client.create_tweet(text=tweet_text)
+            tweet_id = tweet.data["id"]
+            return Response({"message": "Tweet posted successfully!", "tweet_id": tweet_id}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
