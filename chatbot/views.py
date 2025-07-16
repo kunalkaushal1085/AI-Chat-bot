@@ -756,7 +756,9 @@ facebook_auth_code = None
 class FacebookCallbackView(APIView):
     def get(self, request):
         user_id = request.GET.get('state')
-        print(f"{user=}")
+        if not user_id:
+            return Response({"error": "Missing user_id in state parameter."}, status=status.HTTP_400_BAD_REQUEST)
+
         auth_code = request.GET.get('code')
         if not auth_code:
             # Redirect user to Facebook Login
@@ -767,7 +769,7 @@ class FacebookCallbackView(APIView):
                 f"response_type=code&"
                 f"client_id={os.getenv("FACEBOOK_APP_ID")}&"
                 f"redirect_uri={os.getenv("REDIRECT_URL")}&"
-                f"state={user}&"
+                f"state={user_id}&"
                 f"scope=pages_manage_posts,pages_read_engagement,pages_show_list,instagram_basic,instagram_content_publish,email"
                 
             )
