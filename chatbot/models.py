@@ -51,35 +51,44 @@ class WorkSpace(models.Model):
         return f"{self.name} - {self.user.username}"
     
 
-class LinkedinToken(models.Model):
-    # user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="linkedin_token")
+class SocialToken(models.Model):
+    PROVIDER_CHOICES = [
+        ('linkedin', 'LinkedIn'),
+        ('facebook', 'Facebook'),
+        ('instagram', 'Instagram'),
+        ('twitter', 'Twitter'),
+        # Add more as needed
+    ]
+    # user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="social_tokens")
+    provider = models.CharField(max_length=32, choices=PROVIDER_CHOICES)
+    social_user_id = models.CharField(max_length=128, null=True, blank=True)
     _access_token = models.CharField(max_length=1024, null=True, blank=True, db_column='access_token')
+    refresh_token = models.CharField(max_length=1024, null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def is_expired(self):
-        """Check if token is expired"""
         if not self.expires_at:
-            return True  
+            return True
         return datetime.now() >= self.expires_at
 
     @property
     def access_token(self):
-        """Decrypt access token when accessed"""
         if self._access_token:
             return decrypt_data(self._access_token)
         return None
 
     @access_token.setter
     def access_token(self, value):
-        """Encrypt access token before saving"""
         if value:
             self._access_token = encrypt_data(value)
         else:
             self._access_token = None
 
     def save(self, *args, **kwargs):
-        # Ensure the token is encrypted before saving
         if self._access_token and not self._access_token.startswith('gAAAA'):
             self._access_token = encrypt_data(decrypt_data(self._access_token))
         super().save(*args, **kwargs)
+
+    class Meta:
+        unique_together = ('provider', 'social_user_id')

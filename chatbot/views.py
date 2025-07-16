@@ -763,7 +763,7 @@ class FacebookCallbackView(APIView):
                 f"client_id={os.getenv("FACEBOOK_APP_ID")}&"
                 f"redirect_uri={os.getenv("REDIRECT_URL")}&"
                 f"state={state}&"
-                f"scope=pages_manage_posts,pages_read_engagement,pages_show_list,instagram_basic,instagram_content_publish"
+                f"scope=pages_manage_posts,pages_read_engagement,pages_show_list,instagram_basic,instagram_content_publish,email"
                 
             )
             return redirect(auth_url)
@@ -801,15 +801,50 @@ class FacebookCallbackView(APIView):
                 "details": long_token_response.json()
             }, status=status.HTTP_400_BAD_REQUEST)
         long_lived_token = long_token_response.json().get("access_token")
-        print(f"{long_lived_token=}")
         if not long_lived_token:
             return Response({"error": "No long-lived token returned from Facebook."}, status=status.HTTP_400_BAD_REQUEST)
+        user_info_url = "https://graph.facebook.com/me"
+        params = {
+            "fields": "id,name,email",
+            "access_token": long_lived_token
+        }
+        print(params,'params')
+        user_info_response = requests.get(user_info_url, params=params)
+        user_info = user_info_response.json()
+        facebook_user_id = user_info.get("id")
+        facebook_email = user_info.get("email")
+        print(facebook_email,'facebook')
 
+        expires_at = timezone.now() + timedelta(days=60)
+        SocialToken.objects.update_or_create(
+            # user=request.user,
+            provider='facebook',
+            social_user_id=facebook_user_id,
+            defaults={
+                'access_token': long_lived_token,
+                'expires_at': expires_at
+            }
+        )
         # Return only the long-lived user access token valid for 60days
         return Response({
             "user_access_token": long_lived_token
         }, status=status.HTTP_200_OK) 
 
+# class GetDecryptedTokenView(APIView):
+#     def post(self, request):
+#         # provider = request.data.get('provider')
+#         # social_user_id = request.data.get('social_user_id')
+#         # if not provider or not social_user_id:
+#         #     return Response({'error': 'provider and social_user_id are required.'}, status=status.HTTP_400_BAD_REQUEST)
+#         try:
+#             token_obj = SocialToken.objects.get(provider=provider, social_user_id=social_user_id)
+#             return Response({
+#                 'provider': provider,
+#                 'social_user_id': social_user_id,
+#                 'access_token': token_obj.access_token
+#             }, status=status.HTTP_200_OK)
+#         except SocialToken.DoesNotExist:
+#             return Response({'error': 'Token not found.'}, status=status.HTTP_404_NOT_FOUND) 
 
 def get_pages_info(user_access_token):
     """
@@ -1080,5 +1115,82 @@ class TwitterPostTweetView(APIView):
             return Response({"message": "Tweet posted successfully!", "tweet_id": tweet_id}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
+import secrets
+import hashlib
+from urllib.parse import urlencode
+
+CODE_VERIFIER_STORE = {}
+
+def generate_pkce():
+    verifier = secrets.token_urlsafe(64)
+    challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(verifier.encode()).digest()
+    ).decode().rstrip("=")
+    return verifier, challenge
+
+class TwitterCallbackView(APIView):
+    def get(self, request):
+        auth_code = request.GET.get("code")
+        if not auth_code:
+            code_verifier, code_challenge = generate_pkce()
+            CODE_VERIFIER_STORE["latest"] = code_verifier
+            state = secrets.token_urlsafe(16)
+            client_id = os.getenv("TWITTER_CLIENT_ID")
+            callback_url = os.getenv("TWITTER_CALLBACK_URL")
+            auth_url = "https://twitter.com/i/oauth2/authorize?" + urlencode({
+                "response_type": "code",
+                "client_id": client_id,
+                "redirect_uri": callback_url,
+                "scope": "tweet.read users.read offline.access",
+                "state": state,
+                "code_challenge": code_challenge,
+                "code_challenge_method": "S256"
+            })
+            return redirect(auth_url)
+
+        token_url = "https://api.twitter.com/2/oauth2/token"
+        code_verifier = CODE_VERIFIER_STORE.get("latest")
+        client_id = os.getenv("TWITTER_CLIENT_ID")
+        client_secret = os.getenv("TWITTER_CLIENT_SECRET")
+        callback_url = os.getenv("TWITTER_CALLBACK_URL")
+
+        data = {
+            "grant_type": "authorization_code",
+            "code": auth_code,
+            "redirect_uri": callback_url,
+            "code_verifier": code_verifier
+        }
+
+        # Add HTTP Basic Auth header
+        basic_auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Authorization": f"Basic {basic_auth}"
+        }
+
+        response = requests.post(token_url, data=urlencode(data), headers=headers)
+
+        if response.status_code != 200:
+            return Response({
+                "error": "Token exchange failed",
+                "details": response.json()
+            }, status=response.status_code)
+
+        token_data = response.json()
+        expires_at = timezone.now() + timedelta(days=60)
+        SocialToken.objects.update_or_create(
+            provider='twitter',
+            defaults={
+                'access_token': token_data.get("access_token"),
+                'refresh_token': token_data.get("refresh_token"),
+                'expires_at': expires_at
+            }
+        )
+        return Response({
+            "access_token": token_data.get("access_token"),
+            "refresh_token": token_data.get("refresh_token"),
+            "expires_in": token_data.get("expires_in"),
+            "scope": token_data.get("scope")
+        }, status=200)
 
