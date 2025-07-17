@@ -92,3 +92,9 @@ class SocialToken(models.Model):
 
     class Meta:
         unique_together = ('provider', 'social_user_id')
+
+
+class UserChat(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, unique=True)
+    chat_history = models.JSONField(default=list)
+    updated_at = models.DateTimeField(auto_now=True)

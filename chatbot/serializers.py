@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
-from .models import UserProfile,WorkSpace
+from .models import UserProfile,WorkSpace,UserChat
 
 
 # User Registration Serializer
@@ -44,4 +44,12 @@ class WorkSpaceSerializer(serializers.ModelSerializer):
         model = WorkSpace
         fields = ['id', 'user', 'name', 'description','image','created_at'] # add id
         read_only_fields = ['id', 'user', 'created_at']
+
+
+
+class ChatMessageSerializer(serializers.Serializer):
+    role = serializers.CharField()
+    content = serializers.CharField()
+    # class Meta:
+    #     model = UserChat
 
