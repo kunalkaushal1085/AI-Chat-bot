@@ -30,6 +30,7 @@ urlpatterns = [
     path('linkedin/post/', LinkedInPostView.as_view(), name='linkedin-post'),
     path('twitter/post/', TwitterPostTweetView.as_view(), name='twitter-post-tweet'),
     path('twitter/callback/',TwitterCallbackView.as_view(), name='twitter-callback'),
+    path('chatbot/',ChatBotAPIView.as_view(), name='social-chat'),
 
    
 ]

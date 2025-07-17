@@ -2,6 +2,7 @@ from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 import os
 
+
 load_dotenv()
 
 
@@ -30,3 +31,5 @@ def get_user_from_token(request):
         return user
     except Exception as e:
         return None
+
+

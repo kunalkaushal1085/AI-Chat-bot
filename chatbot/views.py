@@ -8,7 +8,7 @@ from django.contrib.auth import authenticate,login as django_login, logout as dj
 from rest_framework.permissions import IsAuthenticated,IsAdminUser
 from rest_framework.authtoken.models import Token
 from .models import *
-from .serializers import UserRegistrationSerializer
+from .serializers import UserRegistrationSerializer,ChatMessageSerializer
 from dotenv import load_dotenv
 import re
 from django.core.mail import send_mail
@@ -40,6 +40,7 @@ import tweepy
 import secrets
 import hashlib
 from urllib.parse import urlencode
+from chatbot.chat import ai_agent, sanitize_input,tools
 
 
 
@@ -1015,7 +1016,7 @@ class LinkedInOAuthLoginView(APIView):
             expires_in = token_data.get("expires_in")
             expires_at = timezone.now() + timedelta(seconds=expires_in) if expires_in else None
             # You can add logic to associate with a user if needed
-            LinkedinToken.objects.create(
+            SocialToken.objects.create(
                 access_token=access_token,
                 expires_at=expires_at
             )
@@ -1053,7 +1054,7 @@ class LinkedInPostView(APIView):
         if not content:
             return Response({"error": "Content is required"}, status=status.HTTP_400_BAD_REQUEST)
         #Get the latest token
-        token_obj = LinkedinToken.objects.order_by('-created_at').first()
+        token_obj = SocialToken.objects.order_by('-created_at').first()
         if not token_obj:
             return Response({"error": "No valid token found"}, status=status.HTTP_400_BAD_REQUEST)
         access_token = token_obj.access_token
@@ -1191,3 +1192,134 @@ class TwitterPostTweetView(APIView):
             return Response({"message": "Tweet posted successfully!", "tweet_id": tweet_id}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+# class ChatBotAPIView(APIView):
+#     permission_classes = [IsAuthenticated]
+
+#     def post(self, request):
+#         user = request.user
+#         prompt = request.data.get('prompt')
+#         choice_raw  = request.data.get('get_choice','')
+#         if not prompt:
+#             return Response({"error": "Prompt is required."}, status=status.HTTP_400_BAD_REQUEST)
+#         # data =[
+#         #     {"message":"hi, there is a product","options":['Linkedin','Facebook','Twitter','Instagram']},
+#         #     {"message":"Great choice","options":['freelancer and solo Enterpreneures','corporations','Growong Enterpries','sales and marketing teams','small business owners','general audience other']},
+            
+#         # ]
+#         choices = [c.strip() for c in choice_raw.split(',') if c.strip()]
+#         print(choices, 'choices (as list)')
+#         # Get or create chat history for this user
+#         user_chat, created = UserChat.objects.get_or_create(user=user)
+#         messages = user_chat.chat_history if isinstance(user_chat.chat_history, list) else []
+#         messages.append({"role": "user", "content": prompt})
+#         try:
+#             print(tools,'?????')
+#             for tool in tools:
+#                 print(tool['function']['name'] )
+#             enabled_tools = [tool for tool in tools if tool['function']['name'] in choices] if choices else tools
+#             print(enabled_tools,'enable')
+#             response=ai_agent(messages=messages, tools=enabled_tools)
+#             print("AI agent response:", response)
+#             if response is None:
+#                 return Response({
+#                     "status": False,
+#                     "error": "AI agent returned no response."
+#                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+#             # Append AI response
+#             if response.get("type") == "text":
+#                 sanitized_content = sanitize_input(response.get("content", ""))
+#                 messages.append({"role": "assistant", "content": sanitized_content})
+#             elif response.get("type") == "image":
+#                 image_url = response.get("url", "")
+#                 messages.append({"role": "assistant", "content": f"Generated Image: {image_url}"})
+#             else:
+#                 messages.append({"role": "assistant", "content": "Sorry, I couldn't process your request."})
+
+#             # Save updated history
+#             user_chat.chat_history = messages
+#             user_chat.updated_at = timezone.now()
+#             user_chat.save()
+
+#             return Response({
+#                 "status": True,
+#                 "message": "Response generated and saved.",
+#                 "response_type": response["type"],
+#                 "content": sanitized_content if response["type"] == "text" else None,
+#                 "image_url": response.get("url") if response["type"] == "image" else None,
+#                 "choices": choices,
+#                 "chat_history": messages
+#             }, status=status.HTTP_200_OK)
+
+#         except Exception as e:
+#             return Response({
+#                 "status": False,
+#                 "error": str(e)
+#             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ChatBotAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        prompt = request.data.get('prompt')
+        choices = request.data.get('get_choice', [])
+        if isinstance(choices, str):
+            choices = [c.strip() for c in choices.split(',') if c.strip()]
+        if not prompt:
+            return Response({"error": "Prompt is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        platform = choices[0] if len(choices) > 0 else ""
+        audience = choices[1] if len(choices) > 1 else ""
+        description = prompt
+
+        user_message = f"Platform: {platform}, Audience: {audience}, Description: {description}"
+        user_msg = {"role": "user", "content": user_message}
+
+        # Get or create chat history for this user
+        user_chat, created = UserChat.objects.get_or_create(user=user)
+        messages = user_chat.chat_history if isinstance(user_chat.chat_history, list) else []
+        
+        # Validate and append user message
+        serializer = ChatMessageSerializer(data=user_msg)
+        serializer.is_valid(raise_exception=True)
+        messages.append(serializer.validated_data)
+
+        try:
+            response = ai_agent(messages=messages, tools=tools)
+            print("AI agent response:", response)
+            # Validate and append AI's response
+            if response.get("type") == "text":
+                sanitized_content = sanitize_input(response.get("content", ""))
+                ai_msg = {"role": "assistant", "content": sanitized_content}
+            elif response.get("type") == "image":
+                ai_msg = {"role": "assistant", "content": f"Generated Image: {response.get('url', '')}"}
+            else:
+                ai_msg = {"role": "assistant", "content": "Sorry, I couldn't process your request."}
+
+            serializer = ChatMessageSerializer(data=ai_msg)
+            serializer.is_valid(raise_exception=True)
+            messages.append(serializer.validated_data)
+
+            # Save updated history
+            user_chat.chat_history = messages
+            user_chat.updated_at = timezone.now()
+            user_chat.save()
+
+            return Response({
+                "status": True,
+                "message": "Response generated and saved.",
+                "response_type": response.get("type"),
+                "content": sanitized_content if response.get("type") == "text" else None,
+                "image_url": response.get("url") if response.get("type") == "image" else None,
+                "chat_history": messages
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": False,
+                "error": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -14,7 +14,6 @@ migrations/
 !*/migrations/__init__.py  # Keep the __init__.py file
 
 # Ignore environment files
-.env
 suissma_env/
 venv/
 env/
@@ -22,3 +21,5 @@ env/
 #add media file
 media/
 */media/
+config.bat
+node_modules
