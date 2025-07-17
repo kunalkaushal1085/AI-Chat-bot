@@ -755,21 +755,17 @@ facebook_auth_code = None
 
 class FacebookCallbackView(APIView):
     def get(self, request):
-        user_id = request.GET.get('state')
-        if not user_id:
-            return Response({"error": "Missing user_id in state parameter."}, status=status.HTTP_400_BAD_REQUEST)
 
         auth_code = request.GET.get('code')
         if not auth_code:
             # Redirect user to Facebook Login
             state = "somerandomstate"
-            print(f"{os.getenv("REDIRECT_URL")=}")
             auth_url = (
                 f"https://www.facebook.com/v19.0/dialog/oauth?"
                 f"response_type=code&"
                 f"client_id={os.getenv("FACEBOOK_APP_ID")}&"
-                f"redirect_uri={os.getenv("REDIRECT_URL")}&"
-                f"state={user_id}&"
+                f"redirect_uri={os.getenv('REDIRECT_URL')}&"
+                f"state={state}&"
                 f"scope=pages_manage_posts,pages_read_engagement,pages_show_list,instagram_basic,instagram_content_publish,email"
                 
             )
@@ -821,13 +817,8 @@ class FacebookCallbackView(APIView):
         facebook_email = user_info.get("email")
 
         expires_at = timezone.now() + timedelta(days=60)
-        User = get_user_model()
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
         SocialToken.objects.update_or_create(
-            user=user,
+
             provider='facebook',
             social_user_id=facebook_user_id,
             defaults={
