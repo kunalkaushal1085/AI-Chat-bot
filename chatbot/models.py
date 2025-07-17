@@ -57,9 +57,9 @@ class SocialToken(models.Model):
         ('facebook', 'Facebook'),
         ('instagram', 'Instagram'),
         ('twitter', 'Twitter'),
-        # Add more as needed
+    
     ]
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="social_tokens")
+    # user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="social_tokens")
     provider = models.CharField(max_length=32, choices=PROVIDER_CHOICES)
     social_user_id = models.CharField(max_length=128, null=True, blank=True)
     _access_token = models.CharField(max_length=1024, null=True, blank=True, db_column='access_token')
